@@ -59,6 +59,7 @@ jobs:
       # cadastre TAURI_SIGNING_PRIVATE_KEY_PASSWORD como "" e este
       # passo normaliza para vazio antes de assinar.
       - name: Normalize signing password
+        shell: bash
         run: |
           PWD='${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}'
           if [ "$PWD" = '""' ] || [ "$PWD" = "''" ]; then PWD=''; fi
