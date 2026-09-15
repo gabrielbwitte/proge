@@ -55,12 +55,21 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # O GitHub não aceita Secret vazio: se a chave não tem senha,
+      # cadastre TAURI_SIGNING_PRIVATE_KEY_PASSWORD como "" e este
+      # passo normaliza para vazio antes de assinar.
+      - name: Normalize signing password
+        run: |
+          PWD='${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}'
+          if [ "$PWD" = '""' ] || [ "$PWD" = "''" ]; then PWD=''; fi
+          echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$PWD" >> "$GITHUB_ENV"
+
       - name: Build and publish
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Proge ${{ github.ref_name }}"
