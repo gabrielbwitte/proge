@@ -65,13 +65,19 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
     throw new Error("Sem conexão com a internet.");
   }
   if (res.status === 404) {
-    throw new Error("Nenhuma release publicada no GitHub ainda.");
+    throw new Error(
+      `Nenhuma release publicada no GitHub ainda (HTTP 404 em ${RELEASES_URL}).`,
+    );
   }
   if (res.status === 403) {
-    throw new Error("Limite da API do GitHub atingido. Tente mais tarde.");
+    throw new Error(
+      `Limite da API do GitHub atingido (HTTP 403 em ${RELEASES_URL}). Tente mais tarde.`,
+    );
   }
   if (!res.ok) {
-    throw new Error(`GitHub retornou erro (${res.status}).`);
+    throw new Error(
+      `GitHub retornou erro HTTP ${res.status} em ${RELEASES_URL}.`,
+    );
   }
   const release = (await res.json()) as GithubRelease;
   const latest = release.tag_name.replace(/^v/i, "");
