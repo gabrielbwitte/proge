@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Proge — projeção para igrejas</title>
+  <defs>
+    <linearGradient id="proge-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#312E81"/>
+      <stop offset="0.55" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="proge-beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.12"/>
+    </linearGradient>
+  </defs>
+
+  <!-- fundo -->
+  <rect width="512" height="512" rx="116" fill="url(#proge-bg)"/>
+
+  <!-- feixe do projetor até o telão -->
+  <polygon points="256,392 128,272 384,272" fill="url(#proge-beam)"/>
+  <polygon points="256,392 196,272 316,272" fill="#FFFFFF" opacity="0.16"/>
+
+  <!-- telão -->
+  <rect x="104" y="76" width="304" height="200" rx="26" fill="#FFFFFF"/>
+  <rect x="126" y="98" width="260" height="156" rx="15" fill="#0C0C16"/>
+
+  <!-- cruz (conteúdo da igreja) -->
+  <rect x="245" y="118" width="22" height="76" rx="6" fill="#FFFFFF"/>
+  <rect x="219" y="138" width="74" height="22" rx="6" fill="#FFFFFF"/>
+
+  <!-- linhas do versículo -->
+  <rect x="166" y="210" width="180" height="12" rx="6" fill="#FFFFFF" opacity="0.55"/>
+  <rect x="196" y="230" width="120" height="12" rx="6" fill="#FFFFFF" opacity="0.3"/>
+
+  <!-- projetor -->
+  <rect x="196" y="372" width="120" height="52" rx="16" fill="#FFFFFF"/>
+  <circle cx="256" cy="398" r="17" fill="#4F46E5"/>
+  <circle cx="256" cy="398" r="8" fill="#FFFFFF"/>
+
+  <!-- indicador NO AR -->
+  <circle cx="388" cy="88" r="16" fill="#22C55E"/>
+  <circle cx="388" cy="88" r="16" fill="none" stroke="#FFFFFF" stroke-width="6"/>
+</svg>
