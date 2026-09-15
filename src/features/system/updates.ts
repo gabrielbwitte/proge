@@ -3,7 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { isTauri } from "@/lib/tauri";
 import pkg from "../../../package.json";
 
-const GITHUB_REPO = "gabrielwitte/proge";
+const GITHUB_REPO = "gabrielbwitte/proge";
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
 export interface UpdateInfo {

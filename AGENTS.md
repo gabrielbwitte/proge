@@ -6,7 +6,7 @@
 
 - **Produto:** Tauri v2 app — Bíblia, Letras, Fotos, Vídeos e Fundos (wallpapers por categoria) projetados em 1..3 telões. A janela do operador nunca projeta sozinha; só `Projetar`/`Limpar` alteram os telões.
 - **Público:** operador de mídia / ministro de louvor.
-- **Repositório:** `gabrielwitte/proge` — verificação de atualizações via `api.github.com/repos/.../releases/latest`.
+- **Repositório:** `gabrielbwitte/proge` — verificação de atualizações via `api.github.com/repos/.../releases/latest`.
 
 ## 2. Stack e versões
 
@@ -76,16 +76,21 @@ src-tauri/
 - `plugins.sql.preload: ["sqlite:proge.db"]`.
 - `app.windows: [{ label: "main", title: "Proge", width:1200, height:800 }]`. Telões são `WebviewWindow` criados em runtime (`stage`, `stage-2`, `stage-3`).
 - `app.security.assetProtocol: { enable:true, scope:{ allow:["**"] } }` — necessário para `convertFileSrc` de imagens/vídeos locais.
-- `bundle.targets: all`.
+- `bundle.targets: all` + `bundle.createUpdaterArtifacts: true` (gera `.zip/.sig` + `latest.json` para o auto-update).
+
+### Updater (auto-update)
+- `plugins.updater: { active:true, dialog:false, endpoints:["https://github.com/gabrielbwitte/proge/releases/latest/download/latest.json"], pubkey:"<minisign pub>" }`.
+- Chave privada **fora do repo** em `~/.tauri/proge.key` (gerada com `npm run tauri -- signer generate -w ~/.tauri/proge.key --ci`); no CI vai em Secrets `TAURI_SIGNING_PRIVATE_KEY` (+ `_PASSWORD` se houver senha). Se perder a chave, updates param de funcionar — gerar novo par exige trocar `pubkey` e publicar release nova.
+- Sem assinatura válida o updater recusa o pacote; `dialog:false` porque o `UpdateCard` tem UI própria com progresso.
 
 ### `Cargo.toml` / `lib.rs`
 - `tauri` com `features=["protocol-asset"]`.
-- Plugins: `tauri-plugin-sql { features=["sqlite"] }`, `tauri-plugin-fs`, `tauri-plugin-dialog`, `tauri-plugin-opener`.
-- Em `lib.rs`: `.plugin(tauri_plugin_fs::init()).plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_sql::Builder::new().build())...invoke_handler![greet]`.
+- Plugins: `tauri-plugin-sql { features=["sqlite"] }`, `tauri-plugin-fs`, `tauri-plugin-dialog`, `tauri-plugin-opener`, `tauri-plugin-updater`, `tauri-plugin-process` (relaunch pós-update).
+- Em `lib.rs`: `.plugin(tauri_plugin_fs::init()).plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_sql::Builder::new().build())...plugin(tauri_plugin_updater::Builder::new().build()).plugin(tauri_plugin_process::init())...invoke_handler![greet]`.
 
 ### `capabilities/default.json`
 - `windows: ["main","stage","stage-2","stage-3"]`.
-- `permissions: core:default, core:window:default, core:webview:default, core:event:default, opener:default, sql:default, sql:allow-execute (obrigatório — sem isso `execute` falha silenciosamente), dialog:default, fs:default + fs:allow-read-dir/read-file/stat/exists + fs:scope-{home,picture,video,desktop,download}-recursive`.
+- `permissions: core:default, core:window:default, core:webview:default, core:event:default, opener:default, updater:default, process:default, sql:default, sql:allow-execute (obrigatório — sem isso `execute` falha silenciosamente), dialog:default, fs:default + fs:allow-read-dir/read-file/stat/exists + fs:scope-{home,picture,video,desktop,download}-recursive`.
 
 ### Gotchas Tauri
 - Vite ignora `src-tauri/**` no watcher — mudanças Rust exigem reiniciar `tauri dev`.
@@ -155,7 +160,7 @@ src-tauri/
 - **Integração:** `BibliaPanel`/`LetrasPanel` marcam `ProjectableItem.category` (`"biblia"`/`"letra"`) para troca automática de wallpaper no `store`.
 
 ### Configuração (`src/features/modules/panels.tsx` + `src/features/system/`)
-- Tabs `biblia | letras | midia | teloes | sistema`. `ConfigPanel` com `TabsContent flex min-h-0 flex-1 h-full overflow-y-auto`. `MonitorManager` e `UpdateCard` (`updates.ts`: `getAppVersion` via `@tauri-apps/api/app getVersion` fallback `package.json 0.1.0`, `isNewer` com normalize, `checkForUpdates` em `api.github.com/repos/gabrielwitte/proge/releases/latest`, 404/403 tratados, `openUrl`).
+- Tabs `biblia | letras | midia | teloes | sistema`. `ConfigPanel` com `TabsContent flex min-h-0 flex-1 h-full overflow-y-auto`. `MonitorManager` e `UpdateCard` (`updates.ts`: `getAppVersion` via `@tauri-apps/api/app getVersion` fallback `package.json`, `isNewer` com normalize, `checkForUpdates` em `api.github.com/repos/gabrielbwitte/proge/releases/latest`, 404/403 tratados, `openUrl` fallback browser; `updater.ts`: `checkNativeUpdate()` / `downloadInstallAndRelaunch(onProgress)` via `@tauri-apps/plugin-updater` + `relaunch()` via `@tauri-apps/plugin-process`, erros via `describeUpdaterError`). Fluxo no clique: `Verificando → Baixando X% (Started/Progress/Finished) → Instalando → relaunch` (Windows sai sozinho pelo instalador).
 
 ## 13. Layout e shell
 
@@ -178,3 +183,11 @@ src-tauri/
 - `capabilities/default.json` cobre todas as `windows` e `permissions` usadas.
 - Telão espelhado funciona em `npm run tauri dev` (hash `#/stage`, `BroadcastChannel` fallback no browser) e `image/video` não recebem wallpaper.
 - Listas longas rolam dentro da viewport (`ScrollArea` sem overflow da página) e footer permanece sticky.
+
+## 16. Release e auto-update
+
+- **Versionar:** `package.json` **e** `tauri.conf.json` juntos (o updater compara `currentVersion` do binário com `version` do `latest.json`; `updates.ts:isNewer` compara com a tag).
+- **Publicar:** `git tag vX.Y.Z && git push origin vX.Y.Z` → `.github/workflows/release.yml` (matrix macOS/Windows/Linux via `tauri-action@v0`) assina com `TAURI_SIGNING_PRIVATE_KEY` e anexa artefatos + `latest.json` à Release.
+- **Secrets exigidos no repo:** `TAURI_SIGNING_PRIVATE_KEY` (conteúdo de `~/.tauri/proge.key`) e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (vazio se a chave não tem senha).
+- **Testar update:** instalar o `.msi/.dmg` da release anterior, abrir `Configuração → Sistema → Verificar atualizações → Baixar e instalar`, validar progresso + relaunch. Em `tauri dev` o fluxo nativo não é testável (sem `latest.json` publicado o `check()` falha — esperado, cai no fallback GitHub).
+- **Rotação de chave:** gerar novo par, trocar `pubkey` em `tauri.conf.json`, atualizar Secret, publicar release nova. Versões antigas com `pubkey` antiga não atualizam para a nova — avisar operadores.

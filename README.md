@@ -32,7 +32,7 @@ Operador de mídia / ministro de louvor que precisa trocar versículo, letra, fo
 - **Fundo (wallpaper) por categoria** — 3 wallpapers da pasta de Fotos: *Padrão* (telão limpo), *Bíblia* e *Letra*. Troca automática ao projetar texto; `image`/`video` nunca recebem wallpaper.
 - **Telões espelhados** — renderiza o mesmo conteúdo em `stage`, `stage-2` e `stage-3` (`WebviewWindow` fullscreen sem decoração). No browser funciona via `window.open` + `BroadcastChannel`.
 - **Telões → Monitores** — detecta monitores (`availableMonitors`), mostra mapa SVG proporcional com resolução/aspect/posição e saídas automáticas ordenadas por x/y (sem arrastar manualmente).
-- **Sistema** — verificação de atualizações em `api.github.com/repos/gabrielwitte/proge/releases/latest` com comparação semântica e botão de download.
+- **Sistema** — verificação de atualizações com comparação semântica e **instalação automática**: o app baixa, instala e reinicia sozinho (com barra de progresso).
 
 ### Fluxo do operador
 `Anterior / Próximo` (ou `← → / PageUp PageDown / Espaço`) só navegam localmente. `Enter` projeta o item selecionado, `Esc` limpa o telão. O footer mostra `AO VIVO` e anima `proge-press` a cada atalho. Tudo cabe na viewport — listas rolam internamente em `ScrollArea`, footer permanece `sticky`.
@@ -48,7 +48,7 @@ Operador de mídia / ministro de louvor que precisa trocar versículo, letra, fo
 
 ### 1. Clonar e instalar
 ```bash
-git clone https://github.com/gabrielwitte/proge.git
+git clone https://github.com/gabrielbwitte/proge.git
 cd proge
 npm install
 ```
@@ -79,6 +79,46 @@ Não existe binário `tauri` standalone. Todo acesso é via npm script:
 npm run tauri -- --help
 npm run tauri -- info
 ```
+
+---
+
+## Atualizando o app (operador)
+
+Com o Proge instalado na máquina, não é preciso baixar nada manualmente:
+
+1. Abra **Configuração → Sistema**.
+2. Clique em **Verificar atualizações**.
+3. Se houver versão nova, clique em **Baixar e instalar**.
+4. Acompanhe a barra de progresso (`Baixando X%…`). Não feche o app.
+5. Ao terminar, o app **reinicia sozinho** já na nova versão (no Windows o instalador pode pedir confirmação do sistema).
+
+> Sem internet, o app mostra "Sem conexão com a internet". Se algo falhar, use o botão **Baixar no GitHub** como alternativa.
+
+## Publicando uma release (mantenedor)
+
+Cada tag `v*` dispara o workflow `.github/workflows/release.yml`, que compila para macOS/Windows/Linux, **assina** os artefatos e publica a Release com o `latest.json` — é esse arquivo que o app consulta no update.
+
+```bash
+# 1. Sincronizar a versão nos dois arquivos
+#    package.json ("version") e src-tauri/tauri.conf.json ("version")
+# 2. Commitar, taguear e enviar
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+### Chaves de assinatura (configuração única)
+
+```bash
+# Gera o par de chaves (privada fora do repo!)
+npm run tauri -- signer generate -w ~/.tauri/proge.key --ci
+```
+
+- A **pública** (`~/.tauri/proge.key.pub`) vai em `src-tauri/tauri.conf.json → plugins.updater.pubkey`.
+- A **privada** vai em GitHub **Settings → Secrets → Actions**:
+  - `TAURI_SIGNING_PRIVATE_KEY` = conteúdo de `~/.tauri/proge.key`
+  - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` = senha (deixe vazio se a chave não tem senha)
+
+> ⚠️ Se perder a chave privada, as versões já instaladas **não conseguem mais atualizar** — será preciso trocar a `pubkey`, publicar release nova e avisar os operadores.
 
 ---
 
@@ -122,4 +162,4 @@ src-tauri/              # tauri.conf.json, capabilities/default.json, Cargo.toml
 
 ## Licença
 
-Privado — `gabrielwitte/proge`.
+Privado — `gabrielbwitte/proge`.
