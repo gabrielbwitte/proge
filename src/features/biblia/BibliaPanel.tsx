@@ -96,7 +96,6 @@ export function BibliaPanel() {
         kind: "text",
         title: `${label(v.number)} (${version.toUpperCase()})`,
         body: v.text,
-        ref: `${label(v.number)} • ${version.toUpperCase()}`,
         category: "biblia",
       }));
       setItems(next);

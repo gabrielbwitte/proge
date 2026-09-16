@@ -7,7 +7,7 @@ import {
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getSetting, setSetting } from "@/db/settings-repo";
 import { isTauri } from "@/lib/tauri";
-import { STAGE_LABELS } from "./stage-window";
+import { closeStaleStages, desiredStageLabels, isStageRoute, openStage, awaitStageCreated } from "./stage-window";
 
 export interface MonitorInfo {
   /** Identidade estável: nome do SO ou `monitor-x-y`. */
@@ -138,10 +138,6 @@ export async function saveLayout(layout: StageLayout): Promise<void> {
   await setSetting(LAYOUT_KEY, JSON.stringify(layout));
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /** Move a janela do operador para o monitor escolhido e centraliza. */
 export async function moveOperatorTo(m: MonitorInfo): Promise<void> {
   if (!isTauri()) return;
@@ -154,7 +150,8 @@ export async function moveOperatorTo(m: MonitorInfo): Promise<void> {
 /**
  * Posiciona/abre a saída `label` no monitor, em fullscreen.
  * Sair e voltar de fullscreen garante que a janela vá para o monitor certo
- * mesmo quando já estava aberta em outro.
+ * mesmo quando já estava aberta em outro. Criação é windowed em (x,y) e só
+ * depois entra em fullscreen, para o SO colocar a janela no monitor certo.
  */
 export async function placeStageOn(
   label: string,
@@ -172,38 +169,61 @@ export async function placeStageOn(
     } catch {
       // Nem sempre estava em fullscreen: segue o fluxo.
     }
-    await existing.setPosition(pos);
-    await existing.setFullscreen(true);
-    await existing.show();
+    try {
+      await existing.setPosition(pos);
+    } catch {
+      // Posição pode falhar em fullscreen: o setFullscreen(false) acima cobre.
+    }
+    try {
+      await existing.setFullscreen(true);
+    } catch {
+      // Visível mesmo sem fullscreen: aceita.
+    }
+    await existing.show().catch(() => {});
+    await existing.setFocus().catch(() => {});
     return;
   }
-  new WebviewWindow(label, {
-    url: "index.html#/stage",
-    title: "Proge — Telão",
-    x: pos.x,
-    y: pos.y,
-    width: 960,
-    height: 600,
-    decorations: false,
-    skipTaskbar: true,
-  });
-  for (let i = 0; i < 30; i++) {
-    await delay(100);
-    const w = await WebviewWindow.getByLabel(label);
-    if (w) {
-      try {
-        await w.setFullscreen(true);
-      } catch {
-        // Visível mesmo sem fullscreen: aceita.
-      }
-      return;
-    }
+  let created: WebviewWindow | null = null;
+  try {
+    created = new WebviewWindow(label, {
+      url: "index.html#/stage",
+      title: "Proge — Telão",
+      x: pos.x,
+      y: pos.y,
+      width: 960,
+      height: 600,
+      decorations: false,
+      skipTaskbar: true,
+    });
+  } catch (e) {
+    throw new Error(
+      `Não foi possível criar a janela "${label}": ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
+  // O construtor nunca lança por falha do backend: o erro chega via
+  // `tauri://error` e aqui vira exceção (antes sumia em silêncio).
+  await awaitStageCreated(created, label);
+  try {
+    await created.setPosition(pos);
+  } catch (e) {
+    throw new Error(
+      `Janela "${label}" criada, mas não foi posicionar no monitor: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  try {
+    await created.setFullscreen(true);
+  } catch (e) {
+    throw new Error(
+      `Janela "${label}" criada, mas não foi entrar em fullscreen: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  await created.show().catch(() => {});
 }
 
 /**
- * Aplica o layout: operador no seu monitor + cada saída no seu monitor,
+ * Aplica o layout: operador no seu monitor + uma janela fullscreen por saída,
  * na ordem configurada. Sem saídas configuradas, abre o telão padrão.
+ * Janelas de monitores removidos são fechadas.
  */
 export async function applyLayout(
   layout: StageLayout,
@@ -218,11 +238,48 @@ export async function applyLayout(
     .map((key) => byKey.get(key))
     .filter((m): m is MonitorInfo => m != null);
   if (targets.length === 0) {
-    const { openStage } = await import("./stage-window");
-    await openStage(STAGE_LABELS[0]);
+    await openStage();
     return;
   }
-  for (let i = 0; i < targets.length && i < STAGE_LABELS.length; i++) {
-    await placeStageOn(STAGE_LABELS[i], targets[i]);
+  const labels = desiredStageLabels(targets.length);
+  await closeStaleStages(labels);
+  // Em série: evita condição de corrida na criação e garante
+  // uma janela fullscreen por saída, no monitor certo.
+  for (let i = 0; i < targets.length; i++) {
+    await placeStageOn(labels[i], targets[i]);
+  }
+  // Segurança: fecha qualquer órfã que tenha sobrevivido.
+  await closeStaleStages(labels);
+}
+
+/**
+ * Auto-aplicação no boot (só janela do operador): restaura o layout salvo e
+ * abre/posiciona uma janela fullscreen por saída. Sem layout salvo e com 2+
+ * monitores, usa as saídas automáticas e salva. Idempotente e silenciosa.
+ */
+export async function autoApplySavedLayout(): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    if (isStageRoute()) return;
+    const monitors = await listMonitors();
+    if (monitors.length === 0) return;
+    const keys = new Set(monitors.map((m) => m.key));
+    const saved = await loadLayout();
+    const operator =
+      saved.operator && keys.has(saved.operator)
+        ? saved.operator
+        : ((await currentMonitorKey()) ?? null);
+    const savedTargets = saved.outputs.filter((k) => keys.has(k));
+    let outputs = savedTargets;
+    if (outputs.length === 0 && monitors.length > 1) {
+      outputs = autoOutputs(monitors, operator).map((m) => m.key);
+      await saveLayout({ operator, outputs }).catch(() => {});
+    }
+    if (outputs.length === 0) return;
+    const layout: StageLayout = { operator, outputs };
+    await applyLayout(layout, monitors);
+  } catch (e) {
+    // Boot nunca deve quebrar por causa dos telões, mas o erro fica no console.
+    console.error("[proge] autoApplySavedLayout:", e);
   }
 }

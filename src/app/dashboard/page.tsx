@@ -17,6 +17,7 @@ import {
 } from "@/features/modules/panels"
 import { ProjectionProvider } from "@/features/projection/store"
 import { useProjectionShortcuts } from "@/features/projection/useProjectionShortcuts"
+import { autoApplySavedLayout } from "@/features/stage/monitors"
 import type { ModuleId } from "@/features/projection/types"
 
 const MODULE_TITLES: Record<ModuleId, string> = {
@@ -52,6 +53,10 @@ function ShortcutsHost({ children }: { children: React.ReactNode }) {
 
 export default function Page() {
     const [module, setModule] = React.useState<ModuleId>("biblia")
+    // Boot (só operador): reabre uma janela fullscreen por saída salva.
+    React.useEffect(() => {
+        autoApplySavedLayout();
+    }, [])
     return (
         <ProjectionProvider>
             <ShortcutsHost>

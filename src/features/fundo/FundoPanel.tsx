@@ -1,6 +1,7 @@
 import * as React from "react";
 import { getWallpapers, setWallpaper } from "./fundo-repo";
 import { listMedia, resolveAssetUrl } from "../media/media-repo";
+import { emitWallpapers } from "../projection/events";
 import type { FundoCategory, FundoWallpapers } from "../projection/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,10 +24,12 @@ const TAB_DESCRIPTIONS: Record<FundoCategory, string> = {
 function WallpaperTab({
   category,
   currentPath,
+  disabled,
   onSelect,
 }: {
   category: FundoCategory;
   currentPath: string | undefined;
+  disabled: boolean;
   onSelect: (path: string | null) => void;
 }) {
   const [dir, setDir] = React.useState("");
@@ -105,7 +108,7 @@ function WallpaperTab({
             <span className="truncate text-xs text-muted-foreground" title={currentPath}>{currentPath ?? "Nenhum wallpaper selecionado"}</span>
             <div className="flex gap-2">
               {currentPath ? (
-                <Button variant="outline" size="sm" onClick={() => onSelect(null)}>
+                <Button variant="outline" size="sm" disabled={disabled} onClick={() => onSelect(null)}>
                   Remover
                 </Button>
               ) : null}
@@ -134,6 +137,7 @@ function WallpaperTab({
                   key={f.path}
                   type="button"
                   title={f.name}
+                  disabled={disabled}
                   onClick={() => onSelect(f.path)}
                   className={cn(
                     "group relative aspect-video overflow-hidden rounded-md border bg-muted outline-none transition focus-visible:border-ring",
@@ -160,19 +164,31 @@ function WallpaperTab({
 export function FundoPanel() {
   const [wallpapers, setWallpapers] = React.useState<FundoWallpapers>({});
   const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
 
   React.useEffect(() => {
     getWallpapers().then((w) => {
       setWallpapers(w);
       setLoading(false);
-      window.dispatchEvent(new CustomEvent("fundo:wallpapers", { detail: w }));
+      void emitWallpapers(w);
     });
   }, []);
 
   const handleSelect = async (category: FundoCategory, path: string | null) => {
-    const next = await setWallpaper(category, path);
-    setWallpapers(next);
-    window.dispatchEvent(new CustomEvent("fundo:wallpapers", { detail: next }));
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const next = await setWallpaper(category, path);
+      setWallpapers(next);
+      // Local (operador) + telões (Tauri event + BroadcastChannel).
+      await emitWallpapers(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao salvar o fundo.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -181,6 +197,14 @@ export function FundoPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 py-4 lg:px-6">
+      {error ? (
+        <p className="shrink-0 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      {saving ? (
+        <p className="shrink-0 text-sm text-muted-foreground">Salvando fundo…</p>
+      ) : null}
       <Tabs defaultValue="padrao" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
         <TabsList className="shrink-0">
           <TabsTrigger value="padrao">Padrão</TabsTrigger>
@@ -188,13 +212,13 @@ export function FundoPanel() {
           <TabsTrigger value="letra">Letra</TabsTrigger>
         </TabsList>
         <TabsContent value="padrao" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-          <WallpaperTab category="padrao" currentPath={wallpapers.padrao} onSelect={(p) => handleSelect("padrao", p)} />
+          <WallpaperTab category="padrao" currentPath={wallpapers.padrao} disabled={saving} onSelect={(p) => handleSelect("padrao", p)} />
         </TabsContent>
         <TabsContent value="biblia" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-          <WallpaperTab category="biblia" currentPath={wallpapers.biblia} onSelect={(p) => handleSelect("biblia", p)} />
+          <WallpaperTab category="biblia" currentPath={wallpapers.biblia} disabled={saving} onSelect={(p) => handleSelect("biblia", p)} />
         </TabsContent>
         <TabsContent value="letra" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-          <WallpaperTab category="letra" currentPath={wallpapers.letra} onSelect={(p) => handleSelect("letra", p)} />
+          <WallpaperTab category="letra" currentPath={wallpapers.letra} disabled={saving} onSelect={(p) => handleSelect("letra", p)} />
         </TabsContent>
       </Tabs>
     </div>

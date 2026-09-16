@@ -68,8 +68,8 @@ export function FotosPanel() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-4 lg:px-6">
-      <div className="flex items-center justify-between gap-2">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 py-4 lg:px-6">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <p className="truncate text-sm text-muted-foreground">
           {dir} · {items.length} {items.length === 1 ? "foto" : "fotos"}
         </p>
@@ -87,7 +87,7 @@ export function FotosPanel() {
           </CardHeader>
         </Card>
       ) : (
-        <ScrollArea className="min-h-0 flex-1 rounded-md border">
+        <ScrollArea className="h-full min-h-0 w-full flex-1 rounded-md border">
           <div className="grid auto-rows-min grid-cols-3 gap-2 p-2 sm:grid-cols-4 lg:grid-cols-6">
             {items.map((item, i) => (
               <button
@@ -99,7 +99,7 @@ export function FotosPanel() {
                 className={cn(
                   "group relative aspect-video overflow-hidden rounded-md border bg-muted outline-none transition focus-visible:border-ring",
                   i === selectedIndex &&
-                    "border-transparent ring-2 ring-green-700",
+                  "border-transparent ring-2 ring-green-700",
                 )}
               >
                 {item.mediaUrl ? (

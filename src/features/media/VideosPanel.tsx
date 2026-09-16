@@ -245,8 +245,8 @@ export function VideosPanel() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-4 lg:px-6">
-      <div className="flex items-center justify-between gap-2">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 py-4 lg:px-6">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <p className="truncate text-sm text-muted-foreground">
           {dir} · {items.length} {items.length === 1 ? "vídeo" : "vídeos"} ·
           projeta com autoplay
@@ -265,14 +265,14 @@ export function VideosPanel() {
           </CardHeader>
         </Card>
       ) : (
-        <ScrollArea className="min-h-0 flex-1 rounded-md border">
+        <ScrollArea className="h-full min-h-0 w-full flex-1 rounded-md border">
           <div className="flex flex-col gap-1 p-2">
             {items.map((item, i) => (
               <Button
                 key={item.id}
                 ref={i === selectedIndex ? selectedRef : null}
                 variant={i === selectedIndex ? "secondary" : "ghost"}
-                className="h-auto shrink-0 items-center justify-start gap-3 whitespace-normal py-2 text-left"
+                className="h-auto items-center justify-start gap-3 whitespace-normal py-2 text-left"
                 onClick={() => selectIndex(i)}
               >
               <VideoThumb src={item.mediaUrl} title={item.title} />

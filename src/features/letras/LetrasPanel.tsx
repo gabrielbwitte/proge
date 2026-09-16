@@ -98,7 +98,6 @@ export function LetrasPanel() {
         kind: "text",
         title: `${data.title} — ${s.label}`,
         body: s.body,
-        ref: `${data.title} • ${s.label}`,
         category: "letra",
       }));
       setItems(next);
@@ -512,7 +511,7 @@ export function LetrasPanel() {
                       onClick={() => selectIndex(i)}
                     >
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {item.ref?.split("•")[1]?.trim() ?? `Trecho ${i + 1}`}
+                        {item.title.split("—")[1]?.trim() ?? `Trecho ${i + 1}`}
                       </span>
                       <span className="text-sm leading-relaxed whitespace-pre-line">
                         {item.body}

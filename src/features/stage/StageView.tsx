@@ -7,6 +7,7 @@ import { DEFAULT_STAGE_THEME, type FundoWallpapers, type ProjectPayload } from "
 /**
  * Janela de saída (telão/TV/projetor), fullscreen.
  * Só muda via eventos `proge:project` / `proge:clear` vindos do operador.
+ * Quando limpo (Esc/Limpar): mostra SOMENTE o fundo padrão, sem texto.
  */
 export function StageView() {
   const [payload, setPayload] = React.useState<ProjectPayload | null>(null);
@@ -29,8 +30,17 @@ export function StageView() {
       (p) => {
         setPayload(p);
         setLive(true);
+        // Redundância: garante fundo atual mesmo se o evento de wallpapers falhou.
+        getWallpapers().then(setWallpapers);
       },
-      () => setLive(false),
+      () => {
+        // Limpo = só fundo padrão: descarta o payload (e seu wallpaper
+        // de categoria) e não renderiza texto algum.
+        setLive(false);
+        setPayload(null);
+        getWallpapers().then(setWallpapers);
+      },
+      (w) => setWallpapers(w),
     ).then((u) => {
       unlisten = u;
     });
@@ -39,45 +49,58 @@ export function StageView() {
 
   const theme = payload?.theme ?? DEFAULT_STAGE_THEME;
   const idleBg = wallpapers.padrao ? (() => { try { return resolveAssetUrl(wallpapers.padrao); } catch { return undefined; } })() : undefined;
-  const backgroundImage = theme.backgroundImage ?? (!live ? idleBg : undefined);
+  const isMediaCover =
+    !!live &&
+    !!payload &&
+    !!payload.mediaUrl &&
+    (payload.kind === "image" || payload.kind === "video");
+  // Limpo (!live): sempre o fundo PADRÃO — nunca o wallpaper da última
+  // categoria. Mídia em tela cheia não usa wallpaper (fundo preto).
+  const backgroundImage = isMediaCover
+    ? undefined
+    : !live
+      ? idleBg
+      : payload?.kind === "blank"
+        ? undefined
+        : (theme.backgroundImage ?? idleBg);
   const stageStyle: React.CSSProperties = {
-    background: theme.background,
+    background: isMediaCover ? "#000" : theme.background,
     color: theme.foreground,
     ...(backgroundImage
       ? {
-          backgroundImage: `url("${backgroundImage}")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-        }
+        backgroundImage: `url("${backgroundImage}")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }
       : {}),
   };
 
   return (
     <div
-      className="flex h-screen w-screen flex-col items-center justify-center overflow-hidden p-12 text-center"
+      className={
+        isMediaCover
+          ? "flex h-screen w-screen items-center justify-center overflow-hidden bg-black"
+          : "flex h-screen w-screen flex-col items-center justify-center overflow-hidden p-12 text-center"
+      }
       style={stageStyle}
     >
-      {!live || !payload || payload.kind === "blank" ? (
-        <div className="flex flex-col items-center gap-3 opacity-40">
-          <span className="text-2xl font-semibold tracking-wide">Proge</span>
-          <span className="text-sm">Aguardando projeção…</span>
-        </div>
-      ) : payload.kind === "image" && payload.mediaUrl ? (
+      {!live || !payload || payload.kind === "blank" ? null : payload.kind === "image" && payload.mediaUrl ? (
         <img
           src={payload.mediaUrl}
           alt={payload.title}
-          className="max-h-full max-w-full object-contain"
+          className="h-full w-full object-contain"
         />
       ) : payload.kind === "video" && payload.mediaUrl ? (
         <video
           key={`${payload.mediaUrl}|${payload.videoOpts?.loop}|${payload.videoOpts?.muted}`}
           src={payload.mediaUrl}
-          className="max-h-full max-w-full"
+          className="h-full w-full object-contain"
           autoPlay
           loop={payload.videoOpts?.loop ?? true}
           muted={payload.videoOpts?.muted ?? false}
           controls={false}
+          playsInline
         />
       ) : (
         <div className="flex max-w-6xl flex-col items-center gap-6">
@@ -92,7 +115,7 @@ export function StageView() {
           >
             {payload.body}
           </p>
-          {payload.title && payload.title !== payload.body ? (
+          {payload.category !== "letra" && payload.title && payload.title !== payload.body ? (
             <span className="text-xl opacity-70">{payload.title}</span>
           ) : null}
         </div>

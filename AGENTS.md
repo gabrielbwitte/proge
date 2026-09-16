@@ -89,8 +89,8 @@ src-tauri/
 - Em `lib.rs`: `.plugin(tauri_plugin_fs::init()).plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_sql::Builder::new().build())...plugin(tauri_plugin_updater::Builder::new().build()).plugin(tauri_plugin_process::init())...invoke_handler![greet]`.
 
 ### `capabilities/default.json`
-- `windows: ["main","stage","stage-2","stage-3"]`.
-- `permissions: core:default, core:window:default, core:webview:default, core:event:default, opener:default, updater:default, process:default, sql:default, sql:allow-execute (obrigatório — sem isso `execute` falha silenciosamente), dialog:default, fs:default + fs:allow-read-dir/read-file/stat/exists + fs:scope-{home,picture,video,desktop,download}-recursive`.
+- `windows: ["main","stage","stage-*"]` (curinga cobre `stage-N` dinâmico; suportado pelo schema).
+- `permissions: core:default, core:window:default, core:webview:default, core:webview:allow-create-webview-window (obrigatório — sem isso `new WebviewWindow` falha silenciosa via `tauri://error`), core:window:allow-set-fullscreen/allow-set-position/allow-show/allow-set-focus/allow-close/allow-center, core:event:default, opener:default, updater:default, process:default, sql:default, sql:allow-execute (obrigatório — sem isso `execute` falha silenciosamente), dialog:default, fs:default + fs:allow-read-dir/read-file/stat/exists + fs:scope-{home,picture,video,desktop,download}-recursive`.
 
 ### Gotchas Tauri
 - Vite ignora `src-tauri/**` no watcher — mudanças Rust exigem reiniciar `tauri dev`.
@@ -117,8 +117,8 @@ src-tauri/
 - `DEFAULT_STAGE_THEME: { background:"#000", foreground:"#fff", fontSize:64 }`.
 
 ### Store (`src/features/projection/store.tsx`)
-- `ProjectionProvider` expõe `items`, `selectedIndex`, `projected`, `live`, `canPrev/Next/Project`, `setItems`, `selectIndex/Next/Prev`, `projectSelected`, `projectTest`, `clear`.
-- **Regra de ouro:** `selectNext/Prev/Index` são navegação **local** — nunca emitem para o telão. Só `projectSelected`/`clear` (/`projectTest`) chamam `emitProject`/`emitClear` e alteram `live`/`projected`.
+- `ProjectionProvider` expõe `items`, `selectedIndex`, `projected`, `live`, `canPrev/Next/Project`, `setItems`, `selectIndex/Next/Prev`, `stepNext/Prev`, `projectSelected`, `projectTest`, `clear`.
+- **Regra de ouro:** `selectNext/Prev/Index` são navegação **local** — nunca emitem para o telão. `stepNext/Prev` (botões `Anterior/Próximo` + setas) navegam e, se `live` (NO AR), reprojetam o novo item; com tela limpa só movem a seleção. Só `projectSelected`/`clear` (/`projectTest`) alteram o telão a partir de tela limpa.
 - Wallpaper por categoria: `wallpaperFor()` resolve `media-repo.resolveAssetUrl()` (ou `convertFileSrc` em Tauri). `image`/`video` ignoram wallpaper; `text` injeta `theme.backgroundImage` (categoria → `wallpapers.biblia/letra`, fallback `padrao`). Cache em `wallpapersRef` sincronizado via evento `fundo:wallpapers`.
 
 ### Event bus (`src/features/projection/events.ts`)
@@ -126,7 +126,7 @@ src-tauri/
 - `StageView` escuta ambos e renderiza.
 
 ### Atalhos (`src/features/projection/useProjectionShortcuts.ts`)
-- `ArrowLeft/PageUp → prev`, `ArrowRight/PageDown/Space → next`, `Enter → project` (ignora `e.repeat`), `Esc → clear`. Animação `proge-press` via `CustomEvent("proge:shortcut")` no footer; badge `NO AR` em `SiteFooter`.
+- `ArrowLeft/PageUp → stepPrev`, `ArrowRight/PageDown/Space → stepNext` (navegam e, se NO AR, reprojetam), `Enter → project` (ignora `e.repeat`), `Esc → clear`. Animação `proge-press` via `CustomEvent("proge:shortcut")` no footer; badge `NO AR` em `SiteFooter`.
 
 ## 11. Telões (multi-window)
 
@@ -175,7 +175,7 @@ src-tauri/
 - **Novos módulos:** 1) adicionar `ModuleId` em `projection/types.ts`, 2) criar `src/features/<mod>/`, 3) exportar em `modules/panels.tsx`, 4) registrar em `AppSidebar` e `dashboard/page.tsx` (`MODULE_TITLES` + `switch`).
 - **Imports:** sempre `@/`; nunca relativo `../../` fora do mesmo feature.
 - **Estilo:** não editar `tailwind.config.js`; todo tema em `App.css`.
-- **Projeção:** nunca fazer `Anterior/Próximo` emitir para o stage; só os botões `Projetar/Limpar` (e seus atalhos).
+- **Projeção:** `Anterior/Próximo` usam `stepNext/Prev` — navegam e, se NO AR, reprojetam o novo item. A partir de tela limpa, só `Projetar/Limpar` (e Enter/Esc) alteram o telão.
 
 ## 15. Definition of Done
 

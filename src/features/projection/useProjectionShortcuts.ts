@@ -9,7 +9,7 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 export function useProjectionShortcuts(): void {
-  const { canPrev, canNext, canProject, selectPrev, selectNext, projectSelected, clear } = useProjection();
+  const { canPrev, canNext, canProject, stepPrev, stepNext, projectSelected, clear } = useProjection();
 
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -20,7 +20,7 @@ export function useProjectionShortcuts(): void {
         case "PageUp": {
           if (!canPrev) return;
           e.preventDefault();
-          selectPrev();
+          void stepPrev();
           window.dispatchEvent(new CustomEvent("proge:shortcut", { detail: "prev" }));
           break;
         }
@@ -29,7 +29,7 @@ export function useProjectionShortcuts(): void {
         case " ": {
           if (!canNext) return;
           e.preventDefault();
-          selectNext();
+          void stepNext();
           window.dispatchEvent(new CustomEvent("proge:shortcut", { detail: "next" }));
           break;
         }
@@ -53,5 +53,5 @@ export function useProjectionShortcuts(): void {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canPrev, canNext, canProject, selectPrev, selectNext, projectSelected, clear]);
+  }, [canPrev, canNext, canProject, stepPrev, stepNext, projectSelected, clear]);
 }

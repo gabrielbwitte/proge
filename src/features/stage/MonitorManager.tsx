@@ -9,12 +9,11 @@ import {
   saveLayout,
   type MonitorInfo,
 } from "./monitors";
-import { STAGE_LABELS } from "./stage-window";
+import { closeAllStages, stageLabel } from "./stage-window";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "cn";
-import { closeAllStages } from "./stage-window";
 
 type Role = { kind: "operator" } | { kind: "output"; index: number } | null;
 
@@ -123,33 +122,64 @@ export function MonitorManager() {
   const [currentKey, setCurrentKey] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
   const [applying, setApplying] = React.useState(false);
   const [error, setError] = React.useState("");
+
+  const detectMonitors = React.useCallback(async () => {
+    const [found, saved, current] = await Promise.all([
+      listMonitors(),
+      loadLayout(),
+      currentMonitorKey(),
+    ]);
+    const keys = new Set(found.map((m) => m.key));
+    setMonitors(found);
+    setCurrentKey(current);
+    setOperator((prev) => {
+      if (prev && keys.has(prev)) return prev;
+      if (saved.operator && keys.has(saved.operator)) return saved.operator;
+      return current && keys.has(current) ? current : null;
+    });
+    setOperatorAuto((prevAuto) => {
+      if (saved.operator && keys.has(saved.operator)) return false;
+      return prevAuto;
+    });
+    setSelected((prev) =>
+      prev && keys.has(prev) ? prev : (found[0]?.key ?? null),
+    );
+  }, []);
 
   React.useEffect(() => {
     (async () => {
       setLoading(true);
       setError("");
-      const [found, saved, current] = await Promise.all([
-        listMonitors(),
-        loadLayout(),
-        currentMonitorKey(),
-      ]);
-      const keys = new Set(found.map((m) => m.key));
-      setMonitors(found);
-      setCurrentKey(current);
-      if (saved.operator && keys.has(saved.operator)) {
-        setOperator(saved.operator);
-        setOperatorAuto(false);
-      } else {
-        // Sem escolha salva: operador é o monitor atual (onde o app está).
-        setOperator(current && keys.has(current) ? current : null);
-        setOperatorAuto(true);
+      try {
+        const [found, saved, current] = await Promise.all([
+          listMonitors(),
+          loadLayout(),
+          currentMonitorKey(),
+        ]);
+        const keys = new Set(found.map((m) => m.key));
+        setMonitors(found);
+        setCurrentKey(current);
+        if (saved.operator && keys.has(saved.operator)) {
+          setOperator(saved.operator);
+          setOperatorAuto(false);
+        } else {
+          // Sem escolha salva: operador é o monitor atual (onde o app está).
+          setOperator(current && keys.has(current) ? current : null);
+          setOperatorAuto(true);
+        }
+        setSelected((prev) =>
+          prev && keys.has(prev) ? prev : (found[0]?.key ?? null),
+        );
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "Falha ao detectar monitores.",
+        );
+      } finally {
+        setLoading(false);
       }
-      setSelected((prev) =>
-        prev && keys.has(prev) ? prev : (found[0]?.key ?? null),
-      );
-      setLoading(false);
     })();
   }, []);
 
@@ -173,6 +203,18 @@ export function MonitorManager() {
       setOperator(currentKey);
       setOperatorAuto(false);
       setSelected(currentKey);
+    }
+  };
+
+  const handleRedetect = async () => {
+    setRefreshing(true);
+    setError("");
+    try {
+      await detectMonitors();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao redetectar.");
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -202,8 +244,9 @@ export function MonitorManager() {
           Monitores e telões
         </h2>
         <p className="text-sm text-balance text-muted-foreground">
-          {monitors.length} monitor(es) conectado(s). As saídas são automáticas:
-          tudo menos o monitor do operador, da esquerda para a direita.{" "}
+          {monitors.length} monitor(es) conectado(s). Cada saída abre sua
+          própria janela em fullscreen: tudo menos o monitor do operador, da
+          esquerda para a direita.{" "}
           {!isTauri() && "Posicionamento real exige `npm run tauri dev`."}
         </p>
       </div>
@@ -299,7 +342,7 @@ export function MonitorManager() {
                     className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
                   >
                     <span className="font-semibold">
-                      Saída {i + 1} ({STAGE_LABELS[i] ?? `extra-${i + 1}`})
+                      Saída {i + 1} ({stageLabel(i)})
                     </span>
                     <span className="min-w-0 flex-1 truncate text-muted-foreground">
                       {m.name}
@@ -316,6 +359,13 @@ export function MonitorManager() {
         </ScrollArea>
       )}
       <div className="flex shrink-0 flex-wrap gap-2 border-t pt-3">
+        <Button
+          variant="outline"
+          disabled={loading || refreshing || applying || monitors.length === 0}
+          onClick={handleRedetect}
+        >
+          {refreshing ? "Detectando…" : "Redetectar monitores"}
+        </Button>
         <Button
           className="bg-green-700 hover:bg-green-800"
           disabled={loading || applying || monitors.length === 0}

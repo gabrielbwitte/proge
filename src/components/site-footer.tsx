@@ -5,15 +5,16 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 
 export function SiteFooter() {
-    // Regra: Anterior/Próximo só navegam a seleção local.
-    // Só Projetar/Limpar alteram a saída de vídeo (telão).
+    // Regra: Anterior/Próximo trocam a seleção e, se NO AR, atualizam o telão
+    // com o novo item. Com tela limpa, só movem a seleção (não reacendem).
+    // Só Projetar/Limpar alteram a saída a partir de tela limpa.
     const {
         canPrev,
         canNext,
         canProject,
         live,
-        selectPrev,
-        selectNext,
+        stepPrev,
+        stepNext,
         projectSelected,
         clear,
     } = useProjection();
@@ -34,12 +35,12 @@ export function SiteFooter() {
         <footer className="sticky bottom-0 z-30 flex h-(--header-height) shrink-0 items-center gap-2 border-t bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
             <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
                 <div className="flex w-full items-center justify-start gap-2">
-                    <Button disabled={!canPrev} onClick={() => selectPrev()} aria-keyshortcuts="ArrowLeft PageUp" className={pulse === "prev" ? "proge-press ring-2 ring-ring" : undefined}>
+                    <Button disabled={!canPrev} onClick={() => void stepPrev()} aria-keyshortcuts="ArrowLeft PageUp" className={pulse === "prev" ? "proge-press ring-2 ring-ring" : undefined}>
                         <ChevronLeft />
                         <span>Anterior</span>
                         <kbd className="ml-1 hidden rounded border bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">←</kbd>
                     </Button>
-                    <Button disabled={!canNext} onClick={() => selectNext()} aria-keyshortcuts="ArrowRight PageDown Space" className={pulse === "next" ? "proge-press ring-2 ring-ring" : undefined}>
+                    <Button disabled={!canNext} onClick={() => void stepNext()} aria-keyshortcuts="ArrowRight PageDown Space" className={pulse === "next" ? "proge-press ring-2 ring-ring" : undefined}>
                         <span>Próximo</span>
                         <ChevronRight />
                         <kbd className="ml-1 hidden rounded border bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">→</kbd>

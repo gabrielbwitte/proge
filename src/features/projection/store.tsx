@@ -1,7 +1,7 @@
 import * as React from "react";
 import { getWallpapers } from "../fundo/fundo-repo";
 import { resolveAssetUrl } from "../media/media-repo";
-import { emitClear, emitProject } from "./events";
+import { emitClear, emitProject, subscribeWallpapers } from "./events";
 import type { FundoWallpapers, ProjectPayload, ProjectableItem } from "./types";
 import { DEFAULT_STAGE_THEME } from "./types";
 
@@ -20,6 +20,13 @@ interface ProjectionState {
   selectNext: () => void;
   /** Apenas navegação local — NUNCA emite para o telão. */
   selectPrev: () => void;
+  /**
+   * Navega a seleção e, se já houver algo NO AR (`live`), atualiza o telão
+   * com o novo item. Com tela limpa, só move a seleção (não reacende).
+   */
+  stepNext: () => Promise<void>;
+  /** Idem `stepNext`, para trás. */
+  stepPrev: () => Promise<void>;
   /** Único caminho (junto de `clear`) que altera a saída de vídeo. */
   projectSelected: () => Promise<void>;
   projectTest: () => Promise<void>;
@@ -51,6 +58,32 @@ function wallpaperFor(category: ProjectableItem["category"], wallpapers: FundoWa
   }
 }
 
+/** Monta o payload de um item (mídia ignora wallpaper; texto usa categoria). */
+function buildPayload(item: ProjectableItem, wallpapers: FundoWallpapers): ProjectPayload {
+  if (item.kind === "image" || item.kind === "video") {
+    return {
+      kind: item.kind,
+      title: item.title,
+      body: item.body,
+      ref: item.ref,
+      mediaUrl: item.mediaUrl,
+      videoOpts: item.videoOpts,
+      category: item.category,
+    };
+  }
+  const bg = wallpaperFor(item.category, wallpapers);
+  return {
+    kind: item.kind,
+    title: item.title,
+    body: item.body,
+    ref: item.ref,
+    mediaUrl: item.mediaUrl,
+    videoOpts: item.videoOpts,
+    category: item.category,
+    theme: bg ? { ...DEFAULT_STAGE_THEME, backgroundImage: bg } : undefined,
+  };
+}
+
 export function ProjectionProvider({ children }: { children: React.ReactNode }) {
   const [items, setItemsState] = React.useState<ProjectableItem[]>([]);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -62,12 +95,14 @@ export function ProjectionProvider({ children }: { children: React.ReactNode }) 
     getWallpapers().then((w) => {
       wallpapersRef.current = w;
     });
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<FundoWallpapers>).detail;
-      if (detail && typeof detail === "object") wallpapersRef.current = detail;
-    };
-    window.addEventListener("fundo:wallpapers", handler as EventListener);
-    return () => window.removeEventListener("fundo:wallpapers", handler as EventListener);
+    // Local + cross-window (outra janela do operador ou telão que alterou).
+    let unlisten: (() => void) | null = null;
+    subscribeWallpapers((w) => {
+      wallpapersRef.current = w;
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => unlisten?.();
   }, []);
 
   const setItems = React.useCallback((next: ProjectableItem[]) => {
@@ -88,40 +123,36 @@ export function ProjectionProvider({ children }: { children: React.ReactNode }) 
     setSelectedIndex((i) => clampIndex(i - 1, items.length));
   }, [items.length]);
 
-  const projectSelected = React.useCallback(async () => {
-    const item = items[selectedIndex];
-    if (!item) return;
-    if (item.kind === "image" || item.kind === "video") {
-      const payload: ProjectPayload = {
-        kind: item.kind,
-        title: item.title,
-        body: item.body,
-        ref: item.ref,
-        mediaUrl: item.mediaUrl,
-        videoOpts: item.videoOpts,
-        category: item.category,
-      };
-      await emitProject(payload);
-      setProjected(payload);
-      setLive(true);
-      return;
-    }
-    const wallpapers = wallpapersRef.current;
-    const bg = wallpaperFor(item.category, wallpapers);
-    const payload: ProjectPayload = {
-      kind: item.kind,
-      title: item.title,
-      body: item.body,
-      ref: item.ref,
-      mediaUrl: item.mediaUrl,
-      videoOpts: item.videoOpts,
-      category: item.category,
-      theme: bg ? { ...DEFAULT_STAGE_THEME, backgroundImage: bg } : undefined,
-    };
+  const projectItem = React.useCallback(async (item: ProjectableItem) => {
+    const payload = buildPayload(item, wallpapersRef.current);
     await emitProject(payload);
     setProjected(payload);
     setLive(true);
-  }, [items, selectedIndex]);
+  }, []);
+
+  const stepNext = React.useCallback(async () => {
+    const next = clampIndex(selectedIndex + 1, items.length);
+    setSelectedIndex(next);
+    if (live) {
+      const item = items[next];
+      if (item) await projectItem(item);
+    }
+  }, [items, selectedIndex, live, projectItem]);
+
+  const stepPrev = React.useCallback(async () => {
+    const next = clampIndex(selectedIndex - 1, items.length);
+    setSelectedIndex(next);
+    if (live) {
+      const item = items[next];
+      if (item) await projectItem(item);
+    }
+  }, [items, selectedIndex, live, projectItem]);
+
+  const projectSelected = React.useCallback(async () => {
+    const item = items[selectedIndex];
+    if (!item) return;
+    await projectItem(item);
+  }, [items, selectedIndex, projectItem]);
 
   const projectTest = React.useCallback(async () => {
     const wallpapers = wallpapersRef.current;
@@ -156,6 +187,8 @@ export function ProjectionProvider({ children }: { children: React.ReactNode }) 
       selectIndex,
       selectNext,
       selectPrev,
+      stepNext,
+      stepPrev,
       projectSelected,
       projectTest,
       clear,
@@ -169,6 +202,8 @@ export function ProjectionProvider({ children }: { children: React.ReactNode }) 
       selectIndex,
       selectNext,
       selectPrev,
+      stepNext,
+      stepPrev,
       projectSelected,
       projectTest,
       clear,
