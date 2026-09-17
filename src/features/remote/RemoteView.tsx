@@ -28,6 +28,7 @@ import type { RemoteAction, RemoteStateSnapshot } from "./types";
 import { BibleRemote } from "./BibleRemote";
 import { SongsRemote } from "./SongsRemote";
 import { InstallTip } from "./InstallTip";
+import { previewEmbedUrl } from "../web/web-url";
 
 type Phase =
   | { kind: "pin"; error?: string }
@@ -40,6 +41,7 @@ const MODULES: { id: ModuleId; label: string }[] = [
   { id: "letras", label: "Letras" },
   { id: "fotos", label: "Fotos" },
   { id: "videos", label: "Vídeos" },
+  { id: "web", label: "Web" },
 ];
 
 /** Página mobile do controle remoto (`#/remote`), servida pelo Axum na LAN. */
@@ -239,7 +241,7 @@ export function RemoteView() {
 
       {phase.kind === "live" ? (
         <>
-          <div className="grid shrink-0 grid-cols-4 gap-2">
+          <div className="grid shrink-0 grid-cols-5 gap-2">
             {MODULES.map((m) => (
               <Button
                 key={m.id}
@@ -309,6 +311,9 @@ export function RemoteView() {
 function currentTitle(snapshot: RemoteStateSnapshot): string {
   const item = snapshot.items[snapshot.selected_index];
   if (!item) return "Nada selecionado";
+  // Web: mostra só o nome configurado no app (título salvo no banco),
+  // sem o link.
+  if (item.kind === "web") return item.title || "Web";
   return item.ref ? `${item.title} — ${item.ref}` : item.title;
 }
 
@@ -330,6 +335,35 @@ function CurrentPreview({
   const item = snapshot.items[snapshot.selected_index];
   if (!item) {
     return <p className="text-sm text-muted-foreground">Use o operador para montar a lista de projeção.</p>;
+  }
+  if (item.kind === "web") {
+    // Preview real da página (o celular tem internet): iframe sem autoplay
+    // + botão para abrir no navegador (fallback p/ páginas que bloqueiam iframe).
+    const embed = item.embed_url ?? item.ref;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        {embed ? (
+          <iframe
+            key={embed}
+            src={previewEmbedUrl(embed)}
+            title={item.title}
+            className="min-h-48 w-full flex-1 rounded-md border bg-white"
+            allow="fullscreen; encrypted-media; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">Sem URL para pré-visualizar.</p>
+        )}
+        {item.ref ? (
+          <Button
+            variant="outline"
+            onClick={() => window.open(item.ref, "_blank", "noopener")}
+          >
+            Abrir página
+          </Button>
+        ) : null}
+      </div>
+    );
   }
   if ((item.kind === "image" || item.kind === "video") && item.has_media) {
     const src = mediaUrl(resolveApiBase(), pin, item.id);

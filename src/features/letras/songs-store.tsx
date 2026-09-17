@@ -109,7 +109,10 @@ export function SongsNavProvider({ children }: { children: React.ReactNode }) {
 
   // `refresh` com identidade estável (só republica ao entrar no módulo).
   const selectedRef = React.useRef<string | null>(null);
-  selectedRef.current = selectedId;
+  // Sem deps: roda após todo render e mantém `refresh` sempre fresco.
+  React.useEffect(() => {
+    selectedRef.current = selectedId;
+  });
   const refresh = React.useCallback(() => {
     const id = selectedRef.current;
     if (id) void selectSong(id);

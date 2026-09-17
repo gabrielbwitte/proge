@@ -53,7 +53,9 @@ export function StageView() {
     !!live &&
     !!payload &&
     !!payload.mediaUrl &&
-    (payload.kind === "image" || payload.kind === "video");
+    (payload.kind === "image" ||
+      payload.kind === "video" ||
+      payload.kind === "web");
   // Limpo (!live): sempre o fundo PADRÃO — nunca o wallpaper da última
   // categoria. Mídia em tela cheia não usa wallpaper (fundo preto).
   const backgroundImage = isMediaCover
@@ -101,6 +103,15 @@ export function StageView() {
           muted={payload.videoOpts?.muted ?? false}
           controls={false}
           playsInline
+        />
+      ) : payload.kind === "web" && payload.mediaUrl ? (
+        <iframe
+          key={payload.mediaUrl}
+          src={payload.mediaUrl}
+          title={payload.title}
+          className="h-full w-full border-0"
+          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+          allowFullScreen
         />
       ) : (
         <div className="flex max-w-6xl flex-col items-center gap-6">

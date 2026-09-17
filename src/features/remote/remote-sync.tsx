@@ -20,7 +20,7 @@ const PUSH_DEBOUNCE_MS = 150;
 /** Resultados de busca espelhados (cap p/ não inchar o snapshot). */
 const MAX_SONG_RESULTS = 50;
 
-const REMOTE_MODULES = new Set<ModuleId>(["biblia", "letras", "fotos", "videos"]);
+const REMOTE_MODULES = new Set<ModuleId>(["biblia", "letras", "fotos", "videos", "web"]);
 
 function toDto(item: ProjectableItem): RemoteItemDto {
   return {
@@ -30,6 +30,9 @@ function toDto(item: ProjectableItem): RemoteItemDto {
     body: item.body,
     ref: item.ref,
     category: item.category,
+    // Web: o celular monta o preview com a URL de embed (tem internet);
+    // mídia local continua via `/media` (has_media).
+    embed_url: item.kind === "web" ? item.mediaUrl : undefined,
     has_media: item.kind === "image" || item.kind === "video",
   };
 }
@@ -122,7 +125,6 @@ export function RemoteSyncBridge({ module, onModuleChange }: BridgeProps) {
       })();
     }, PUSH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [module, items, selectedIndex, live, projected, bibleDto, letrasDto]);
 
   // Ações do celular → stores (registra uma vez, usa refs p/ frescor).
@@ -136,16 +138,20 @@ export function RemoteSyncBridge({ module, onModuleChange }: BridgeProps) {
     bibleNav,
     songsNav,
   });
-  latest.current = {
-    selectIndex,
-    stepNext,
-    stepPrev,
-    projectSelected,
-    clear,
-    onModuleChange,
-    bibleNav,
-    songsNav,
-  };
+  // Sem deps: roda após todo render; o listener (registrado uma vez)
+  // sempre enxerga as callbacks mais frescas.
+  React.useEffect(() => {
+    latest.current = {
+      selectIndex,
+      stepNext,
+      stepPrev,
+      projectSelected,
+      clear,
+      onModuleChange,
+      bibleNav,
+      songsNav,
+    };
+  });
 
   React.useEffect(() => {
     if (!isTauri()) return;

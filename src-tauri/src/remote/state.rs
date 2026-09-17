@@ -25,6 +25,9 @@ pub struct RemoteItemDto {
     /// Miniatura (dataURL JPEG) gerada no operador — usada p/ vídeo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumb: Option<String>,
+    /// URL de embed pronta p/ <iframe> — usada p/ web.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embed_url: Option<String>,
     /// true quando há arquivo servível em `/media`.
     #[serde(default)]
     pub has_media: bool,
@@ -127,8 +130,10 @@ impl RemoteAction {
             },
             "next" | "prev" | "project" | "clear" => Ok(()),
             "module" => match self.module.as_deref() {
-                Some("biblia") | Some("letras") | Some("fotos") | Some("videos") => Ok(()),
-                _ => Err("módulo inválido (biblia|letras|fotos|videos)".to_string()),
+                Some("biblia") | Some("letras") | Some("fotos") | Some("videos") | Some("web") => {
+                    Ok(())
+                }
+                _ => Err("módulo inválido (biblia|letras|fotos|videos|web)".to_string()),
             },
             "bible" => match (&self.version, &self.book, &self.chapter) {
                 (None, None, None) => Err("ação bible exige version, book ou chapter".to_string()),
@@ -181,8 +186,8 @@ mod tests {
     }
 
     #[test]
-    fn module_aceita_os_quatro_e_rejeita_resto() {
-        for m in ["biblia", "letras", "fotos", "videos"] {
+    fn module_aceita_os_cinco_e_rejeita_resto() {
+        for m in ["biblia", "letras", "fotos", "videos", "web"] {
             let mut a = base("module");
             a.module = Some(m.to_string());
             assert!(a.validate().is_ok(), "{m}");

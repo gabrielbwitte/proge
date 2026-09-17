@@ -14,6 +14,7 @@ import {
     FundoPanel,
     LetrasPanel,
     VideosPanel,
+    WebPanel,
 } from "@/features/modules/panels"
 import { ProjectionProvider } from "@/features/projection/store"
 import { BibleNavProvider } from "@/features/biblia/nav-store"
@@ -28,6 +29,7 @@ const MODULE_TITLES: Record<ModuleId, string> = {
     letras: "Letras",
     fotos: "Fotos",
     videos: "Vídeos",
+    web: "Web",
     fundo: "Fundo",
     configuracao: "Configuração",
 }
@@ -42,6 +44,8 @@ function ModuleContent({ module }: { module: ModuleId }) {
             return <FotosPanel />
         case "videos":
             return <VideosPanel />
+        case "web":
+            return <WebPanel />
         case "fundo":
             return <FundoPanel />
         case "configuracao":

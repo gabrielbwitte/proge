@@ -9,7 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Settings2Icon, CommandIcon, BookPlus, Camera, TextInitial, Video, ImageIcon } from "lucide-react"
+import { Settings2Icon, CommandIcon, BookPlus, Camera, TextInitial, Video, Globe, ImageIcon } from "lucide-react"
 import type { ModuleId } from "@/features/projection/types"
 
 const data: {
@@ -43,6 +43,13 @@ const data: {
       id: "videos",
       icon: (
         <Video />
+      ),
+    },
+    {
+      title: "Web",
+      id: "web",
+      icon: (
+        <Globe />
       ),
     },
     {

@@ -6,6 +6,7 @@ import { FundoPanel } from "../fundo/FundoPanel";
 import { LetrasPanel } from "../letras/LetrasPanel";
 import { FotosPanel } from "../media/FotosPanel";
 import { VideosPanel } from "../media/VideosPanel";
+import { WebPanel } from "../web/WebPanel";
 import { MediaSettings } from "../media/MediaSettings";
 import { UpdateCard } from "../system/UpdateCard";
 import { RemoteControlCard } from "../remote/RemoteControlCard";
@@ -19,7 +20,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 
-export { BibliaPanel, LetrasPanel, FotosPanel, VideosPanel, FundoPanel };
+export { BibliaPanel, LetrasPanel, FotosPanel, VideosPanel, WebPanel, FundoPanel };
 
 function StageOutputsCard() {
   return <MonitorManager />;

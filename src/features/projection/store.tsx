@@ -58,9 +58,9 @@ function wallpaperFor(category: ProjectableItem["category"], wallpapers: FundoWa
   }
 }
 
-/** Monta o payload de um item (mídia ignora wallpaper; texto usa categoria). */
+/** Monta o payload de um item (mídia/web ignoram wallpaper; texto usa categoria). */
 function buildPayload(item: ProjectableItem, wallpapers: FundoWallpapers): ProjectPayload {
-  if (item.kind === "image" || item.kind === "video") {
+  if (item.kind === "image" || item.kind === "video" || item.kind === "web") {
     return {
       kind: item.kind,
       title: item.title,

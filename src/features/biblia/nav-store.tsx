@@ -86,7 +86,10 @@ export function BibleNavProvider({ children }: { children: React.ReactNode }) {
   // Troca de livro/capítulo -> carrega versículos e publica no store.
   // Usa ref p/ `refresh()` ter identidade estável (não reseta a seleção).
   const navRef = React.useRef({ version, book, chapter, books });
-  navRef.current = { version, book, chapter, books };
+  // Sem deps: roda após todo render e mantém `loadChapter` sempre fresco.
+  React.useEffect(() => {
+    navRef.current = { version, book, chapter, books };
+  });
   const genRef = React.useRef(0);
   const loadChapter = React.useCallback(async () => {
     const gen = ++genRef.current;

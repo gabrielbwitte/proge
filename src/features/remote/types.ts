@@ -11,6 +11,8 @@ export interface RemoteItemDto {
   category?: string;
   /** Miniatura (dataURL JPEG) gerada no operador — usada p/ vídeo. */
   thumb?: string;
+  /** URL de embed pronta p/ <iframe> — usada p/ web (YouTube já com autoplay). */
+  embed_url?: string;
   /** true quando há arquivo servível em `/media`. */
   has_media: boolean;
 }

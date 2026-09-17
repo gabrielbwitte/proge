@@ -183,7 +183,7 @@ export async function placeStageOn(
     await existing.setFocus().catch(() => {});
     return;
   }
-  let created: WebviewWindow | null = null;
+  let created: WebviewWindow;
   try {
     created = new WebviewWindow(label, {
       url: "index.html#/stage",
@@ -198,6 +198,7 @@ export async function placeStageOn(
   } catch (e) {
     throw new Error(
       `Não foi possível criar a janela "${label}": ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
     );
   }
   // O construtor nunca lança por falha do backend: o erro chega via
@@ -208,6 +209,7 @@ export async function placeStageOn(
   } catch (e) {
     throw new Error(
       `Janela "${label}" criada, mas não foi posicionar no monitor: ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
     );
   }
   try {
@@ -215,6 +217,7 @@ export async function placeStageOn(
   } catch (e) {
     throw new Error(
       `Janela "${label}" criada, mas não foi entrar em fullscreen: ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
     );
   }
   await created.show().catch(() => {});

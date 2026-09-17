@@ -3,10 +3,11 @@ export type ModuleId =
   | "letras"
   | "fotos"
   | "videos"
+  | "web"
   | "fundo"
   | "configuracao";
 
-export type ProjectionKind = "text" | "image" | "video" | "blank";
+export type ProjectionKind = "text" | "image" | "video" | "web" | "blank";
 
 export interface StageTheme {
   background: string;

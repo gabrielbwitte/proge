@@ -13,7 +13,7 @@
 - **Frontend:** React 19 + TypeScript 6 + Vite 8 + Tailwind CSS v4 + shadcn (`base-vega`) + Base UI (`@base-ui/react`) + `@fontsource-variable/*`.
 - **Backend:** Rust / Tauri v2 (`tauri-plugin-opener`, `tauri-plugin-sql` com `sqlite`, `tauri-plugin-dialog`, `tauri-plugin-fs`).
 - **Libs extras:** `lucide-react`, `zod`, `sonner`, `recharts`, `@dnd-kit/*`, `@tanstack/react-table`.
-- **Sem testes/lint/CI configurados.**
+- **Testes/lint:** `npm test` (vitest), `cargo test` (Rust), `npm run lint` / `lint:fix` (ESLint flat config em `eslint.config.js`: JS/TS recomendado + react-hooks + react-refresh). Sem CI configurado.
 
 ## 3. Comandos
 
