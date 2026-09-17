@@ -160,6 +160,3 @@ src-tauri/              # tauri.conf.json, capabilities/default.json, Cargo.toml
 
 ---
 
-## Licença
-
-Privado — `gabrielbwitte/proge`.
