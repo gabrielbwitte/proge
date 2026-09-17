@@ -2,7 +2,7 @@ import * as React from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { QrCode, Key } from "lucide-react";
-import { remoteGetStatus, remoteStart } from "@/features/remote/remote-api";
+import { remoteGetStatus, ensureRemoteServer } from "@/features/remote/remote-api";
 
 /** Controle remoto: servidor sobe sozinho no boot — aqui só QR + PIN, sem botões. */
 export function RemoteControlCard() {
@@ -15,13 +15,21 @@ export function RemoteControlCard() {
     has_pin: boolean;
   } | null>(null);
   const [failed, setFailed] = React.useState(false);
+  const [persistWarn, setPersistWarn] = React.useState(false);
 
   // Servidor em pé por padrão: garante ligado ao abrir a tela.
   React.useEffect(() => {
     (async () => {
       try {
         const s = await remoteGetStatus();
-        setStatus(s.running ? s : await remoteStart());
+        if (s.running) {
+          setStatus(s);
+        } else {
+          const started = await ensureRemoteServer();
+          setStatus(started);
+          // Persistência falhou: o PIN será sorteado de novo a cada reinício.
+          if (!started.persisted) setPersistWarn(true);
+        }
       } catch (e) {
         console.error("Erro ao iniciar controle remoto:", e);
         setFailed(true);
@@ -61,6 +69,11 @@ export function RemoteControlCard() {
             <p className="text-xs text-muted-foreground text-center max-w-[200px]">
               Aponte a câmera para o QR Code ou digite o PIN no celular.
             </p>
+            {persistWarn ? (
+              <p className="text-xs text-destructive text-center max-w-[220px]">
+                Não foi possível salvar o PIN (SQLite indisponível) — ele mudará a cada reinício do operador.
+              </p>
+            ) : null}
           </div>
         ) : (
           <div className="flex h-32 w-full items-center justify-center rounded-lg border border-dashed text-muted-foreground">

@@ -72,6 +72,33 @@ fn valid_pin(s: &str) -> bool {
     s.len() == 4 && s.bytes().all(|b| b.is_ascii_digit())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_pin_aceita_so_quatro_digitos() {
+        assert!(valid_pin("1234"));
+        assert!(valid_pin("0000"));
+        for bad in ["", "123", "12345", "12a4", " 123", "123 ", "12.4"] {
+            assert!(!valid_pin(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn generate_pin_sempre_quatro_digitos_na_faixa() {
+        for _ in 0..200 {
+            let pin = generate_pin();
+            assert!(
+                pin.len() == 4 && pin.bytes().all(|b| b.is_ascii_digit()),
+                "{pin:?}"
+            );
+            let n: u32 = pin.parse().expect("só dígitos");
+            assert!((1000..10000).contains(&n));
+        }
+    }
+}
+
 /// IP da LAN para o QR Code (cai para 127.0.0.1 se indisponível).
 pub fn lan_ip() -> String {
     local_ip_address::local_ip()
@@ -133,7 +160,9 @@ fn resolve_dist_dir(app: &AppHandle) -> Option<PathBuf> {
             candidates.push(ancestor.join("dist"));
         }
     }
-    candidates.into_iter().find(|d| d.join("index.html").is_file())
+    candidates
+        .into_iter()
+        .find(|d| d.join("index.html").is_file())
 }
 
 async fn start_server(shared: &RemoteShared, app: &AppHandle) -> Result<(), String> {
@@ -145,12 +174,14 @@ async fn start_server(shared: &RemoteShared, app: &AppHandle) -> Result<(), Stri
         let mut pin = shared.pin.write().await;
         if pin.is_empty() {
             *pin = generate_pin();
+            info!("Novo PIN do controle remoto gerado (sem PIN salvo)");
         }
     }
     let port = *shared.port.read().await;
     let srv_state = ServerState {
         shared: shared.clone(),
         app: app.clone(),
+        dist_dir: None,
     };
     let dist_dir = resolve_dist_dir(app);
     match &dist_dir {
@@ -222,6 +253,7 @@ pub async fn remote_start(
         if !valid_pin(&t) {
             return Err("PIN deve ter 4 dígitos".to_string());
         }
+        info!("PIN do controle remoto restaurado das configurações salvas");
         *shared.pin.write().await = t;
     }
     start_server(&shared, &app).await?;

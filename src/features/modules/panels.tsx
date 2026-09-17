@@ -61,19 +61,19 @@ export function ConfigPanel() {
           <TabsTrigger value="teloes">Telões</TabsTrigger>
           <TabsTrigger value="sistema">Sistema</TabsTrigger>
         </TabsList>
-        <TabsContent value="biblia" className="flex min-h-0 flex-1 flex-col">
+        <TabsContent value="biblia" className="flex min-h-0 flex-1 flex-col p-1 pr-4">
           <BibleSettings />
         </TabsContent>
-        <TabsContent value="letras" className="flex min-h-0 flex-1 flex-col">
+        <TabsContent value="letras" className="flex min-h-0 flex-1 flex-col p-1 pr-4">
           <LyricsSettings />
         </TabsContent>
-        <TabsContent value="midia" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <TabsContent value="midia" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-1 pr-4">
           <MediaSettings />
         </TabsContent>
-        <TabsContent value="teloes" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <TabsContent value="teloes" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-1 pr-4">
           <StageOutputsCard />
         </TabsContent>
-        <TabsContent value="sistema" className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        <TabsContent value="sistema" className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-1 pr-4">
           <RemoteControlCard />
           <UpdateCard />
           <DatabaseCard />

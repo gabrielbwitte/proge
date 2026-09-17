@@ -1,12 +1,9 @@
 import * as React from "react";
-import { getSetting, setSetting } from "@/db/settings-repo";
 import { useProjection } from "../projection/store";
-import type { ProjectableItem } from "../projection/types";
+import { useSongsNav } from "./songs-store";
 import {
-  localLyricsProvider,
   parseLyricsText,
   serializeSections,
-  type LyricSong,
   type LyricsSearchResult,
 } from "./provider";
 import { createSong, updateSong } from "./songs-repo";
@@ -23,8 +20,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-const LAST_SONG_KEY = "lyrics.last_song";
-
 function message(e: unknown): string {
   return e instanceof Error ? e.message : "Operação falhou.";
 }
@@ -37,18 +32,24 @@ interface RepertoireEntry {
 }
 
 export function LetrasPanel() {
-  const { items, selectedIndex, setItems, selectIndex } = useProjection();
-  const [songs, setSongs] = React.useState<LyricsSearchResult[]>([]);
-  const [query, setQuery] = React.useState("");
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [song, setSong] = React.useState<LyricSong | null>(null);
+  const { items, selectedIndex, selectIndex } = useProjection();
+  const {
+    query,
+    results: songs,
+    selectedId,
+    song,
+    loading,
+    error,
+    search,
+    selectSong,
+    setError,
+    refresh,
+  } = useSongsNav();
   const [editing, setEditing] = React.useState(false);
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [formTitle, setFormTitle] = React.useState("");
   const [formArtist, setFormArtist] = React.useState("");
   const [formText, setFormText] = React.useState("");
-  const [error, setError] = React.useState("");
-  const [loading, setLoading] = React.useState(true);
   const [repertoire, setRepertoire] = React.useState<RepertoireEntry[]>([]);
   const [repertoireQuery, setRepertoireQuery] = React.useState("");
   const [bibliotecaCollapsed, setBibliotecaCollapsed] = React.useState(false);
@@ -56,6 +57,12 @@ export function LetrasPanel() {
   const bibliotecaSelectedRef = React.useRef<HTMLDivElement | null>(null);
   const repertorioSelectedRef = React.useRef<HTMLDivElement | null>(null);
   const trechoSelectedRef = React.useRef<HTMLButtonElement | null>(null);
+
+  // Ao entrar no módulo, republica a música aberta (os items podem ser
+  // de outro módulo — a lista é global e sem dono).
+  React.useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   React.useEffect(() => {
     bibliotecaSelectedRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -69,59 +76,8 @@ export function LetrasPanel() {
     trechoSelectedRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selectedIndex, items]);
 
-  const reload = React.useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setSongs([]);
-      setError("");
-      return;
-    }
-    try {
-      setSongs(await localLyricsProvider.search(q));
-      setError("");
-    } catch (e) {
-      setError(message(e));
-    }
-  }, []);
-
-  const selectSong = React.useCallback(async (id: string) => {
-    let cancelled = false;
-    try {
-      const data = await localLyricsProvider.fetchSong(id);
-      if (cancelled) return;
-      setSong(data);
-      setSelectedId(id);
-      setEditing(false);
-      setError("");
-      setSetting(LAST_SONG_KEY, id);
-      const next: ProjectableItem[] = data.sections.map((s, i) => ({
-        id: `${id}:${i}`,
-        kind: "text",
-        title: `${data.title} — ${s.label}`,
-        body: s.body,
-        category: "letra",
-      }));
-      setItems(next);
-    } catch (e) {
-      if (!cancelled) setError(message(e));
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [setItems]);
-
-  // Restaura última música (biblioteca inicia vazia até digitar).
-  React.useEffect(() => {
-    (async () => {
-      const last = await getSetting(LAST_SONG_KEY);
-      if (last) await selectSong(last);
-      setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const handleQuery = (q: string) => {
-    setQuery(q);
-    reload(q);
+    search(q);
   };
 
   const startNew = () => {
@@ -161,7 +117,7 @@ export function LetrasPanel() {
           ? await createSong(input)
           : (await updateSong(editingId, input), editingId);
       setEditing(false);
-      await reload(query);
+      search(query);
       await selectSong(String(id));
     } catch (e) {
       setError(message(e));
@@ -280,7 +236,10 @@ export function LetrasPanel() {
                         <Button
                           variant={s.id === selectedId ? "secondary" : "ghost"}
                           className="h-auto min-w-0 flex-1 shrink flex-col items-start whitespace-normal py-2 text-left"
-                          onClick={() => selectSong(s.id)}
+                          onClick={() => {
+                            setEditing(false);
+                            void selectSong(s.id);
+                          }}
                         >
                           <span className="text-sm font-semibold">{s.title}</span>
                           {s.artist ? (
@@ -375,7 +334,10 @@ export function LetrasPanel() {
                         <button
                           type="button"
                           className="min-w-0 flex-1 truncate text-left"
-                          onClick={() => selectSong(entry.songId)}
+                          onClick={() => {
+                            setEditing(false);
+                            void selectSong(entry.songId);
+                          }}
                         >
                           <span className="block truncate text-sm font-medium">
                             {idx + 1}. {entry.title}

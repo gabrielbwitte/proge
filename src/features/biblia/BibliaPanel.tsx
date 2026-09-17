@@ -1,9 +1,6 @@
 import * as React from "react";
-import { getSetting, setSetting } from "@/db/settings-repo";
 import { useProjection } from "../projection/store";
-import type { ProjectableItem } from "../projection/types";
-import { listBooks, listChapter, listVersions } from "./bible-repo";
-import type { BookRow, BibleVersionRow } from "./bible-repo";
+import { useBibleNav } from "./nav-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -16,96 +13,32 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-const LAST_VERSION_KEY = "bible.last_version";
-const LAST_BOOK_KEY = "bible.last_book";
-const LAST_CHAPTER_KEY = "bible.last_chapter";
-
 export function BibliaPanel() {
-  const { items, selectedIndex, setItems, selectIndex } = useProjection();
-  const [versions, setVersions] = React.useState<BibleVersionRow[]>([]);
-  const [version, setVersion] = React.useState("");
-  const [books, setBooks] = React.useState<BookRow[]>([]);
-  const [book, setBook] = React.useState("");
-  const [chapter, setChapter] = React.useState(1);
-  const [loading, setLoading] = React.useState(true);
+  const { items, selectedIndex, selectIndex } = useProjection();
+  const {
+    versions,
+    version,
+    books,
+    book,
+    chapter,
+    bookChapters,
+    loading,
+    setVersion,
+    setBook,
+    setChapter,
+    refresh,
+  } = useBibleNav();
   const selectedRef = React.useRef<HTMLButtonElement | null>(null);
+
+  // Ao entrar no módulo, republica o capítulo atual (os items podem ser
+  // de outro módulo — a lista é global e sem dono).
+  React.useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   React.useEffect(() => {
     selectedRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selectedIndex, items]);
-
-  // Carrega versões baixadas + restaura última posição.
-  React.useEffect(() => {
-    (async () => {
-      const [rows, lastVersion, lastBook, lastChapter] = await Promise.all([
-        listVersions(),
-        getSetting(LAST_VERSION_KEY),
-        getSetting(LAST_BOOK_KEY),
-        getSetting(LAST_CHAPTER_KEY),
-      ]);
-      setVersions(rows);
-      const v = rows.some((r) => r.version === lastVersion)
-        ? (lastVersion as string)
-        : (rows[0]?.version ?? "");
-      setVersion(v);
-      if (lastBook) setBook(lastBook);
-      if (lastChapter) setChapter(Number(lastChapter) || 1);
-      setLoading(false);
-    })();
-  }, []);
-
-  // Troca de versão -> carrega livros.
-  React.useEffect(() => {
-    if (!version) {
-      setBooks([]);
-      return;
-    }
-    setSetting(LAST_VERSION_KEY, version);
-    (async () => {
-      const rows = await listBooks(version);
-      setBooks(rows);
-      setBook((prev) =>
-        rows.some((b) => b.abbrev === prev) ? prev : (rows[0]?.abbrev ?? ""),
-      );
-    })();
-  }, [version]);
-
-  // Troca de livro/capítulo -> carrega versículos e publica no store.
-  // Clicar num versículo só seleciona; projetar é só via "Projetar".
-  React.useEffect(() => {
-    if (!version || !book) {
-      setItems([]);
-      return;
-    }
-    const maxChapter =
-      books.find((b) => b.abbrev === book)?.chapters ?? 0;
-    if (maxChapter > 0 && chapter > maxChapter) {
-      setChapter(maxChapter);
-      return;
-    }
-    setSetting(LAST_BOOK_KEY, book);
-    setSetting(LAST_CHAPTER_KEY, String(chapter));
-    const bookName = books.find((b) => b.abbrev === book)?.name ?? book;
-    let cancelled = false;
-    (async () => {
-      const rows = await listChapter(version, book, chapter);
-      if (cancelled) return;
-      const label = (n: number) => `${bookName} ${chapter}:${n}`;
-      const next: ProjectableItem[] = rows.map((v) => ({
-        id: `${version}:${book}:${chapter}:${v.number}`,
-        kind: "text",
-        title: `${label(v.number)} (${version.toUpperCase()})`,
-        body: v.text,
-        category: "biblia",
-      }));
-      setItems(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [version, book, chapter]);
-
-  const bookChapters = books.find((b) => b.abbrev === book)?.chapters ?? 0;
 
   if (loading) {
     return (
@@ -153,7 +86,7 @@ export function BibliaPanel() {
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Livro</Label>
-          <Select value={book} onValueChange={(v) => { setBook(v ?? ""); setChapter(1); }}>
+          <Select value={book} onValueChange={(v) => setBook(v ?? "")}>
             <SelectTrigger className="w-96">
               <SelectValue placeholder="Livro">
                 {selectedBookName || undefined}

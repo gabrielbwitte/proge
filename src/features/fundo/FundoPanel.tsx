@@ -1,6 +1,6 @@
 import * as React from "react";
 import { getWallpapers, setWallpaper } from "./fundo-repo";
-import { listMedia, resolveAssetUrl } from "../media/media-repo";
+import { listMedia, resolveAssetUrl, type MediaFile } from "../media/media-repo";
 import { emitWallpapers } from "../projection/events";
 import type { FundoCategory, FundoWallpapers } from "../projection/types";
 import { Button } from "@/components/ui/button";
@@ -25,40 +25,21 @@ function WallpaperTab({
   category,
   currentPath,
   disabled,
+  dir,
+  files,
+  loading,
+  error,
   onSelect,
 }: {
   category: FundoCategory;
   currentPath: string | undefined;
   disabled: boolean;
+  dir: string;
+  files: MediaFile[];
+  loading: boolean;
+  error: string;
   onSelect: (path: string | null) => void;
 }) {
-  const [dir, setDir] = React.useState("");
-  const [files, setFiles] = React.useState<{ path: string; name: string }[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const { dir: found, files: list } = await listMedia("photos");
-        if (cancelled) return;
-        setDir(found);
-        setFiles(list);
-      } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Falha ao ler a pasta.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const previewUrl = currentPath ? (() => { try { return resolveAssetUrl(currentPath); } catch { return undefined; } })() : undefined;
 
   if (loading) {
@@ -90,7 +71,7 @@ function WallpaperTab({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-1">
       <Card className="shrink-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">{TAB_LABELS[category]}</CardTitle>
@@ -166,6 +147,12 @@ export function FundoPanel() {
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
+  // Lista da pasta Fotos carregada UMA vez e compartilhada pelas 3 tabs —
+  // antes cada tab revarria o disco ao montar, atrasando toda alternância.
+  const [mediaDir, setMediaDir] = React.useState("");
+  const [mediaFiles, setMediaFiles] = React.useState<MediaFile[]>([]);
+  const [mediaLoading, setMediaLoading] = React.useState(true);
+  const [mediaError, setMediaError] = React.useState("");
 
   React.useEffect(() => {
     getWallpapers().then((w) => {
@@ -173,6 +160,26 @@ export function FundoPanel() {
       setLoading(false);
       void emitWallpapers(w);
     });
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { dir: found, files: list } = await listMedia("photos");
+        if (cancelled) return;
+        setMediaDir(found);
+        setMediaFiles(list);
+      } catch (e) {
+        if (cancelled) return;
+        setMediaError(e instanceof Error ? e.message : "Falha ao ler a pasta.");
+      } finally {
+        if (!cancelled) setMediaLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSelect = async (category: FundoCategory, path: string | null) => {
@@ -211,14 +218,14 @@ export function FundoPanel() {
           <TabsTrigger value="biblia">Bíblia</TabsTrigger>
           <TabsTrigger value="letra">Letra</TabsTrigger>
         </TabsList>
-        <TabsContent value="padrao" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-          <WallpaperTab category="padrao" currentPath={wallpapers.padrao} disabled={saving} onSelect={(p) => handleSelect("padrao", p)} />
+        <TabsContent value="padrao" keepMounted className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+          <WallpaperTab category="padrao" currentPath={wallpapers.padrao} disabled={saving} dir={mediaDir} files={mediaFiles} loading={mediaLoading} error={mediaError} onSelect={(p) => handleSelect("padrao", p)} />
         </TabsContent>
-        <TabsContent value="biblia" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-          <WallpaperTab category="biblia" currentPath={wallpapers.biblia} disabled={saving} onSelect={(p) => handleSelect("biblia", p)} />
+        <TabsContent value="biblia" keepMounted className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+          <WallpaperTab category="biblia" currentPath={wallpapers.biblia} disabled={saving} dir={mediaDir} files={mediaFiles} loading={mediaLoading} error={mediaError} onSelect={(p) => handleSelect("biblia", p)} />
         </TabsContent>
-        <TabsContent value="letra" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-          <WallpaperTab category="letra" currentPath={wallpapers.letra} disabled={saving} onSelect={(p) => handleSelect("letra", p)} />
+        <TabsContent value="letra" keepMounted className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+          <WallpaperTab category="letra" currentPath={wallpapers.letra} disabled={saving} dir={mediaDir} files={mediaFiles} loading={mediaLoading} error={mediaError} onSelect={(p) => handleSelect("letra", p)} />
         </TabsContent>
       </Tabs>
     </div>

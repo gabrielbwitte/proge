@@ -16,6 +16,8 @@ import {
     VideosPanel,
 } from "@/features/modules/panels"
 import { ProjectionProvider } from "@/features/projection/store"
+import { BibleNavProvider } from "@/features/biblia/nav-store"
+import { SongsNavProvider } from "@/features/letras/songs-store"
 import { RemoteSyncBridge } from "@/features/remote/remote-sync"
 import { useProjectionShortcuts } from "@/features/projection/useProjectionShortcuts"
 import { autoApplySavedLayout } from "@/features/stage/monitors"
@@ -60,6 +62,8 @@ export default function Page() {
     }, [])
     return (
         <ProjectionProvider>
+            <BibleNavProvider>
+            <SongsNavProvider>
             <ShortcutsHost>
             <RemoteSyncBridge module={module} onModuleChange={setModule} />
             <SidebarProvider
@@ -86,6 +90,8 @@ export default function Page() {
                 </SidebarInset>
             </SidebarProvider>
             </ShortcutsHost>
+            </SongsNavProvider>
+            </BibleNavProvider>
         </ProjectionProvider>
     )
 }

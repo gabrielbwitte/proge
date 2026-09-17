@@ -15,12 +15,30 @@ export interface RemoteItemDto {
   has_media: boolean;
 }
 
+/** Posição + catálogo da Bíblia espelhados do operador. */
+export interface BibleNavDto {
+  versions: { version: string; name: string }[];
+  books: { abbrev: string; name: string; chapters: number }[];
+  version: string;
+  book: string;
+  chapter: number;
+}
+
+/** Resultado de busca + seleção de letras espelhados do operador. */
+export interface SongsNavDto {
+  results: { id: string; title: string; artist: string }[];
+  selectedId: string | null;
+  query: string;
+}
+
 export interface RemoteStateSnapshot {
   module: string;
   items: RemoteItemDto[];
   selected_index: number;
   live: boolean;
   projected?: unknown;
+  bible?: BibleNavDto;
+  letras?: SongsNavDto;
 }
 
 export interface RemoteSyncPayload extends RemoteStateSnapshot {
@@ -34,12 +52,23 @@ export type RemoteActionType =
   | "prev"
   | "project"
   | "clear"
-  | "module";
+  | "module"
+  | "bible"
+  | "song"
+  | "search";
 
 export interface RemoteAction {
   type: RemoteActionType;
   index?: number;
   module?: ModuleId;
+  /** Navegação da Bíblia (`bible`): ao menos um presente. */
+  version?: string;
+  book?: string;
+  chapter?: number;
+  /** Seleção de música (`song`). */
+  song_id?: string;
+  /** Busca na biblioteca (`search`). */
+  search_query?: string;
 }
 
 export interface RemoteStatus {

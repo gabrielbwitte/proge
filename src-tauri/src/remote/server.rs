@@ -34,6 +34,7 @@ use super::{state::RemoteAction, RemoteShared, REMOTE_ACTION_EVENT};
 pub struct ServerState {
     pub shared: RemoteShared,
     pub app: AppHandle,
+    pub dist_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -48,7 +49,17 @@ fn bearer(headers: &HeaderMap) -> Option<String> {
         .to_str()
         .ok()
         .and_then(|v| v.strip_prefix("Bearer "))
-        .map(|s| s.to_string())
+        .map(|s| s.trim().to_string())
+}
+
+/// Fingerprint não reversível (FNV-1a) p/ correlacionar logs sem expor o PIN.
+fn pin_fp(s: &str) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for b in s.bytes() {
+        hash ^= u64::from(b);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
 }
 
 async fn current_pin(shared: &RemoteShared) -> String {
@@ -59,7 +70,17 @@ fn pin_authorized(expected: &str, headers: &HeaderMap, query: &AuthQuery) -> boo
     if expected.is_empty() {
         return false;
     }
-    let got = query.pin.clone().or_else(|| bearer(headers));
+    let from_query = query
+        .pin
+        .clone()
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty());
+    let source = if from_query.is_some() {
+        "query"
+    } else {
+        "bearer"
+    };
+    let got = from_query.or_else(|| bearer(headers));
     match got {
         Some(t) if t.len() == expected.len() => {
             // Comparação em tempo (quase) constante.
@@ -67,9 +88,20 @@ fn pin_authorized(expected: &str, headers: &HeaderMap, query: &AuthQuery) -> boo
             for (a, b) in t.bytes().zip(expected.bytes()) {
                 diff |= a ^ b;
             }
-            diff == 0
+            let ok = diff == 0;
+            if !ok {
+                debug!(
+                    "PIN recusado via {source} (fp esperado={}, fp recebido={})",
+                    pin_fp(expected),
+                    pin_fp(&t),
+                );
+            }
+            ok
         }
-        _ => false,
+        _ => {
+            debug!("PIN ausente ou com tamanho inesperado via {source}");
+            false
+        }
     }
 }
 
@@ -358,8 +390,51 @@ async fn page_unavailable() -> Response {
         .into_response()
 }
 
+/// `GET /` → `index.html` com `Cache-Control: no-store`. Os assets JS/CSS
+/// têm hash no nome (cache-safe), mas o próprio HTML precisa ser sempre
+/// fresco — senão o celular executa um bundle velho cacheado.
+async fn index_handler(State(srv): State<ServerState>) -> Response {
+    let bytes = match &srv.dist_dir {
+        Some(dir) => tokio::fs::read(dir.join("index.html")).await.ok(),
+        None => None,
+    };
+    match bytes {
+        Some(bytes) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CACHE_CONTROL, "no-store")
+            .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+            .body(Body::from(bytes))
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+        None => page_unavailable().await,
+    }
+}
+
+/// `GET /manifest.webmanifest` com MIME explícito (não depende do
+/// `mime_guess`): permite "Adicionar à tela inicial" com nome/ícone.
+async fn manifest_handler(State(srv): State<ServerState>) -> Response {
+    let bytes = match &srv.dist_dir {
+        Some(dir) => tokio::fs::read(dir.join("manifest.webmanifest")).await.ok(),
+        None => None,
+    };
+    match bytes {
+        Some(bytes) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CACHE_CONTROL, "no-store")
+            .header(header::CONTENT_TYPE, "application/manifest+json")
+            .body(Body::from(bytes))
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 pub fn router(srv: ServerState, dist_dir: Option<std::path::PathBuf>) -> Router {
+    let state = ServerState {
+        dist_dir: dist_dir.clone(),
+        ..srv
+    };
     let app_router = Router::new()
+        .route("/", get(index_handler))
+        .route("/manifest.webmanifest", get(manifest_handler))
         .route("/api/state", get(api_state))
         .route("/api/action", axum::routing::post(api_action))
         .route("/ws", get(ws_handler))
@@ -368,7 +443,48 @@ pub fn router(srv: ServerState, dist_dir: Option<std::path::PathBuf>) -> Router 
         Some(dir) => app_router.fallback_service(ServeDir::new(dir)),
         None => app_router.fallback(page_unavailable),
     };
-    app_router
-        .layer(CorsLayer::permissive())
-        .with_state(srv)
+    app_router.layer(CorsLayer::permissive()).with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_resolve_ponto_e_ponto_ponto() {
+        assert_eq!(normalize_lexical("a/./b/../c"), PathBuf::from("a/c"));
+        assert_eq!(normalize_lexical("/x/../y"), PathBuf::from("/y"));
+        assert_eq!(
+            normalize_lexical("/media/fotos/a.jpg"),
+            PathBuf::from("/media/fotos/a.jpg")
+        );
+    }
+
+    #[test]
+    fn under_roots_barra_prefixo_irmao() {
+        let roots = vec!["/media/fotos".to_string()];
+        assert!(under_roots(&PathBuf::from("/media/fotos/a.jpg"), &roots));
+        assert!(!under_roots(&PathBuf::from("/media/outro.jpg"), &roots));
+        // "/media/fotos2/..." compartilha o prefixo textual, mas não o diretório.
+        assert!(!under_roots(&PathBuf::from("/media/fotos2/a.jpg"), &roots));
+    }
+
+    #[test]
+    fn parse_range_casos() {
+        assert_eq!(parse_range("bytes=0-99", 1000), Some((0, 99)));
+        assert_eq!(parse_range("bytes=100-", 1000), Some((100, 999)));
+        assert_eq!(parse_range("bytes=0-999999", 1000), Some((0, 999)));
+        assert_eq!(parse_range("bytes=-50", 1000), None);
+        assert_eq!(parse_range("bytes=2000-3000", 1000), None);
+        assert_eq!(parse_range("bytes=50-10", 1000), None);
+        assert_eq!(parse_range("bytes=abc-def", 1000), None);
+        assert_eq!(parse_range("items=0-10", 1000), None);
+    }
+
+    #[test]
+    fn pin_fp_deterministico_e_distinto() {
+        assert_eq!(pin_fp("1234"), pin_fp("1234"));
+        assert_ne!(pin_fp("1234"), pin_fp("5678"));
+        assert_eq!(pin_fp("1234").len(), 16);
+    }
 }

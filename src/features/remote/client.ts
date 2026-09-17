@@ -2,6 +2,9 @@ import type { RemoteAction, RemoteStateSnapshot } from "./types";
 
 const PIN_STORAGE_KEY = "proge.remote_pin";
 
+/** PIN válido: exatamente 4 dígitos. */
+const PIN_RE = /^\d{4}$/;
+
 /**
  * Base da API. Por padrão a mesma origem da página (o Axum serve página
  * + API juntos). `?api=http://...` permite apontar p/ outro host
@@ -37,17 +40,56 @@ function queryParam(name: string): string | null {
   }
 }
 
-/** PIN do QR (`?pin=`) com persistência em `localStorage`. */
+/** PIN do QR (`?pin=`) com persistência em `localStorage`.
+ *
+ * O PIN da URL é consumido uma única vez: vale só na primeira leitura e
+ * é removido da URL em seguida. Sem isso, um `?pin=` velho no hash
+ * sombrearia para sempre o PIN digitado manualmente (login ok com o
+ * digitado, mas ações seguintes mandando o velho → 401).
+ */
 export function resolvePin(): string {
   try {
     const fromUrl = queryParam("pin") ?? "";
     if (fromUrl) {
-      window.localStorage.setItem(PIN_STORAGE_KEY, fromUrl);
-      return fromUrl;
+      stripPinFromUrl();
+      if (PIN_RE.test(fromUrl)) {
+        window.localStorage.setItem(PIN_STORAGE_KEY, fromUrl);
+        return fromUrl;
+      }
+      // PIN da URL inválido: ignora e cai para o armazenado.
     }
-    return window.localStorage.getItem(PIN_STORAGE_KEY) ?? "";
+    const stored = window.localStorage.getItem(PIN_STORAGE_KEY) ?? "";
+    return PIN_RE.test(stored) ? stored : "";
   } catch {
     return "";
+  }
+}
+
+/** Remove o parâmetro `pin` do hash e da query sem recarregar a página. */
+export function stripPinFromUrl(): void {
+  try {
+    const url = new URL(window.location.href);
+    let changed = false;
+    const hash = url.hash;
+    const qIndex = hash.indexOf("?");
+    if (qIndex >= 0) {
+      const params = new URLSearchParams(hash.slice(qIndex + 1));
+      if (params.has("pin")) {
+        params.delete("pin");
+        const rest = params.toString();
+        url.hash = rest ? `${hash.slice(0, qIndex)}?${rest}` : hash.slice(0, qIndex);
+        changed = true;
+      }
+    }
+    if (url.searchParams.has("pin")) {
+      url.searchParams.delete("pin");
+      changed = true;
+    }
+    if (changed) {
+      window.history.replaceState(null, "", url.toString());
+    }
+  } catch {
+    // URL ilegível: nada a limpar
   }
 }
 
@@ -65,6 +107,42 @@ export function clearPin(): void {
   } catch {
     // sem armazenamento: nada a limpar
   }
+  // O PIN da URL precisa sair junto — senão o `resolvePin()` o relê
+  // e o erro "PIN inválido" volta em loop mesmo após "Trocar PIN".
+  stripPinFromUrl();
+}
+
+/** Marcador de build injetado pelo Vite (`__PROGE_BUILD__`). */
+export function buildMarker(): string {
+  try {
+    return typeof __PROGE_BUILD__ === "string" && __PROGE_BUILD__
+      ? __PROGE_BUILD__
+      : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/** true quando o `localStorage` está gravável (aba privada pode bloquear). */
+export function storageSelfTest(): boolean {
+  try {
+    const probe = "proge.remote_pin_probe";
+    window.localStorage.setItem(probe, "1");
+    const ok = window.localStorage.getItem(probe) === "1";
+    window.localStorage.removeItem(probe);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** true quando há um PIN válido guardado (nunca expõe o valor). */
+export function hasStoredPin(): boolean {
+  try {
+    return PIN_RE.test(window.localStorage.getItem(PIN_STORAGE_KEY) ?? "");
+  } catch {
+    return false;
+  }
 }
 
 async function authed(
@@ -76,7 +154,7 @@ async function authed(
     ...init,
     headers: {
       ...(init?.headers ?? {}),
-      Authorization: `Bearer ${pin}`,
+      Authorization: `Bearer ${pin.trim()}`,
       "Content-Type": "application/json",
     },
   });

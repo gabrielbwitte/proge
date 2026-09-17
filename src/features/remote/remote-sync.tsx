@@ -4,14 +4,21 @@ import { isTauri } from "@/lib/tauri";
 import { getMediaDir } from "../media/media-repo";
 import { useProjection } from "../projection/store";
 import type { ModuleId, ProjectableItem } from "../projection/types";
-import { remoteGetStatus, remoteStart, remoteSync } from "./remote-api";
+import { useBibleNav } from "../biblia/nav-store";
+import { useSongsNav } from "../letras/songs-store";
+import { remoteGetStatus, ensureRemoteServer, remoteSync } from "./remote-api";
 import {
   REMOTE_ACTION_EVENT,
+  type BibleNavDto,
   type RemoteAction,
   type RemoteItemDto,
+  type SongsNavDto,
 } from "./types";
 
 const PUSH_DEBOUNCE_MS = 150;
+
+/** Resultados de busca espelhados (cap p/ não inchar o snapshot). */
+const MAX_SONG_RESULTS = 50;
 
 const REMOTE_MODULES = new Set<ModuleId>(["biblia", "letras", "fotos", "videos"]);
 
@@ -51,14 +58,17 @@ export function RemoteSyncBridge({ module, onModuleChange }: BridgeProps) {
     projectSelected,
     clear,
   } = useProjection();
+  const bibleNav = useBibleNav();
+  const songsNav = useSongsNav();
 
-  // Servidor em pé por padrão: sobe no boot do operador (idempotente).
+  // Servidor em pé por padrão: sobe no boot do operador (idempotente,
+  // reaproveitando porta/PIN salvos).
   React.useEffect(() => {
     if (!isTauri()) return;
     (async () => {
       try {
         const s = await remoteGetStatus();
-        if (!s.running) await remoteStart();
+        if (!s.running) await ensureRemoteServer();
       } catch {
         // Sem backend ou porta ocupada: o card de Sistema mostra o estado.
       }
@@ -66,6 +76,26 @@ export function RemoteSyncBridge({ module, onModuleChange }: BridgeProps) {
   }, []);
 
   // Espelho → Rust (melhor esforço; só existe servidor no Tauri).
+  const bibleDto = React.useMemo<BibleNavDto>(
+    () => ({
+      versions: bibleNav.versions.map((v) => ({ version: v.version, name: v.name })),
+      books: bibleNav.books.map((b) => ({ abbrev: b.abbrev, name: b.name, chapters: b.chapters })),
+      version: bibleNav.version,
+      book: bibleNav.book,
+      chapter: bibleNav.chapter,
+    }),
+    [bibleNav.versions, bibleNav.books, bibleNav.version, bibleNav.book, bibleNav.chapter],
+  );
+  const letrasDto = React.useMemo<SongsNavDto>(
+    () => ({
+      results: songsNav.results
+        .slice(0, MAX_SONG_RESULTS)
+        .map((r) => ({ id: r.id, title: r.title, artist: r.artist })),
+      selectedId: songsNav.selectedId,
+      query: songsNav.query,
+    }),
+    [songsNav.results, songsNav.selectedId, songsNav.query],
+  );
   React.useEffect(() => {
     if (!isTauri()) return;
     const timer = window.setTimeout(() => {
@@ -83,6 +113,8 @@ export function RemoteSyncBridge({ module, onModuleChange }: BridgeProps) {
             live,
             projected: projected ?? undefined,
             media_roots,
+            bible: bibleDto,
+            letras: letrasDto,
           });
         } catch {
           // Espelho é melhor esforço: nunca quebra o operador.
@@ -90,9 +122,10 @@ export function RemoteSyncBridge({ module, onModuleChange }: BridgeProps) {
       })();
     }, PUSH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [module, items, selectedIndex, live, projected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [module, items, selectedIndex, live, projected, bibleDto, letrasDto]);
 
-  // Ações do celular → store (registra uma vez, usa refs p/ frescor).
+  // Ações do celular → stores (registra uma vez, usa refs p/ frescor).
   const latest = React.useRef({
     selectIndex,
     stepNext,
@@ -100,6 +133,8 @@ export function RemoteSyncBridge({ module, onModuleChange }: BridgeProps) {
     projectSelected,
     clear,
     onModuleChange,
+    bibleNav,
+    songsNav,
   });
   latest.current = {
     selectIndex,
@@ -108,6 +143,8 @@ export function RemoteSyncBridge({ module, onModuleChange }: BridgeProps) {
     projectSelected,
     clear,
     onModuleChange,
+    bibleNav,
+    songsNav,
   };
 
   React.useEffect(() => {
@@ -136,6 +173,20 @@ export function RemoteSyncBridge({ module, onModuleChange }: BridgeProps) {
           if (action.module && REMOTE_MODULES.has(action.module)) {
             api.onModuleChange(action.module);
           }
+          break;
+        case "bible":
+          if (action.version) api.bibleNav.setVersion(action.version);
+          if (action.book) api.bibleNav.setBook(action.book);
+          if (typeof action.chapter === "number") api.bibleNav.setChapter(action.chapter);
+          api.onModuleChange("biblia");
+          break;
+        case "song":
+          if (action.song_id) void api.songsNav.selectSong(action.song_id);
+          api.onModuleChange("letras");
+          break;
+        case "search":
+          if (typeof action.search_query === "string") api.songsNav.search(action.search_query);
+          api.onModuleChange("letras");
           break;
       }
     })

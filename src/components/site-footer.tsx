@@ -52,19 +52,23 @@ export function SiteFooter() {
                     ) : (
                         <Badge variant="outline">○ tela limpa</Badge>
                     )}
-                    <Button
-                        className={pulse === "project" ? "proge-press bg-green-700 hover:bg-green-800 ring-2 ring-ring" : "bg-green-700 hover:bg-green-800"}
-                        disabled={!canProject}
-                        onClick={() => projectSelected()}
-                        aria-keyshortcuts="Enter"
-                    >
-                        <span>Projetar</span>
-                        <kbd className="ml-1 hidden rounded border bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">↵</kbd>
-                    </Button>
-                    <Button variant='secondary' onClick={() => clear()} aria-keyshortcuts="Escape" className={pulse === "clear" ? "proge-press ring-2 ring-ring" : undefined}>
-                        <span>Limpar</span>
-                        <kbd className="ml-1 hidden rounded border bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">Esc</kbd>
-                    </Button>
+                    {live ? (
+                        <Button variant='secondary' onClick={() => clear()} aria-keyshortcuts="Escape" aria-pressed={true} className={pulse === "clear" ? "proge-press ring-2 ring-ring" : undefined}>
+                            <span>Limpar</span>
+                            <kbd className="ml-1 hidden rounded border bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">Esc</kbd>
+                        </Button>
+                    ) : (
+                        <Button
+                            className={pulse === "project" ? "proge-press bg-green-700 hover:bg-green-800 ring-2 ring-ring" : "bg-green-700 hover:bg-green-800"}
+                            disabled={!canProject}
+                            onClick={() => projectSelected()}
+                            aria-keyshortcuts="Enter"
+                            aria-pressed={false}
+                        >
+                            <span>Projetar</span>
+                            <kbd className="ml-1 hidden rounded border bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">↵</kbd>
+                        </Button>
+                    )}
                 </div>
             </div>
         </footer>

@@ -13,6 +13,7 @@ import {
   QrCode,
 } from "lucide-react";
 import {
+  buildMarker,
   clearPin,
   connectRemoteWs,
   fetchRemoteState,
@@ -24,6 +25,9 @@ import {
 } from "./client";
 import type { ModuleId } from "../projection/types";
 import type { RemoteAction, RemoteStateSnapshot } from "./types";
+import { BibleRemote } from "./BibleRemote";
+import { SongsRemote } from "./SongsRemote";
+import { InstallTip } from "./InstallTip";
 
 type Phase =
   | { kind: "pin"; error?: string }
@@ -46,6 +50,10 @@ export function RemoteView() {
   });
   const [pinInput, setPinInput] = React.useState("");
   const disconnectRef = React.useRef<(() => void) | null>(null);
+  // Último PIN autenticado com sucesso — usado para reconectar e para
+  // todas as ações da fase live (nunca re-ler da URL aqui: um `?pin=`
+  // velho no hash sombrearia o PIN digitado e geraria 401).
+  const lastPinRef = React.useRef<string>("");
   // Bíblia como módulo padrão: seleciona uma vez por carregamento da página.
   const didDefaultModuleRef = React.useRef(false);
 
@@ -61,6 +69,7 @@ export function RemoteView() {
     try {
       const snapshot = await fetchRemoteState(base, pin);
       savePin(pin);
+      lastPinRef.current = pin;
       setPhase({ kind: "live", snapshot, pin });
       disconnectRef.current = connectRemoteWs(
         base,
@@ -89,8 +98,18 @@ export function RemoteView() {
     }
   }, [disconnect]);
 
+  // Trava o scroll do documento: só as listas internas rolam.
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   // Autoconexão quando o PIN veio no QR.
   React.useEffect(() => {
+    console.info(`[proge-remote] build ${buildMarker()}`);
     const initial = resolvePin();
     if (initial) void connect(initial);
     return () => disconnectRef.current?.();
@@ -98,7 +117,11 @@ export function RemoteView() {
   }, []);
 
   async function act(action: RemoteAction) {
-    const pin = resolvePin();
+    // Na fase live, o PIN é o que autenticou com sucesso — nunca
+    // `resolvePin()` aqui (a URL pode conter um `?pin=` velho que
+    // causava "PIN inválido" ao trocar de módulo).
+    const pin =
+      phase.kind === "live" ? phase.pin : lastPinRef.current || resolvePin();
     if (!pin) {
       setPhase({ kind: "pin", error: "Informe o PIN exibido no operador." });
       return;
@@ -106,9 +129,18 @@ export function RemoteView() {
     try {
       await sendRemoteAction(resolveApiBase(), pin, action);
     } catch (e) {
+      const message = e instanceof Error ? e.message : "Falha ao enviar comando.";
+      if (message.includes("PIN inválido")) {
+        // PIN girado no operador: volta para a tela de PIN (limpa URL
+        // junto via `clearPin`) em vez de travar na tela de erro.
+        lastPinRef.current = "";
+        clearPin();
+        setPhase({ kind: "pin", error: message });
+        return;
+      }
       setPhase({
         kind: "error",
-        message: e instanceof Error ? e.message : "Falha ao enviar comando.",
+        message,
       });
     }
   }
@@ -126,14 +158,15 @@ export function RemoteView() {
 
   function logout() {
     disconnect();
+    lastPinRef.current = "";
     clearPin();
     setPinInput("");
     setPhase({ kind: "pin" });
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 bg-background px-4 py-6">
-      <header className="flex items-center justify-between">
+    <main className="mx-auto flex h-dvh w-full max-w-md flex-col gap-4 overflow-hidden overscroll-none bg-background px-4 py-6">
+      <header className="flex shrink-0 items-center justify-between">
         <div className="flex items-center gap-2">
           <QrCode className="h-5 w-5" />
           <h1 className="text-lg font-semibold">Proge Controle</h1>
@@ -146,6 +179,7 @@ export function RemoteView() {
       </header>
 
       {phase.kind === "pin" ? (
+        <>
         <Card>
           <CardHeader>
             <CardTitle>Digite o PIN</CardTitle>
@@ -171,6 +205,8 @@ export function RemoteView() {
             </form>
           </CardContent>
         </Card>
+        <InstallTip />
+        </>
       ) : null}
 
       {phase.kind === "connecting" ? (
@@ -186,7 +222,7 @@ export function RemoteView() {
             <div className="flex gap-2">
               <Button
                 onClick={() => {
-                  const pin = resolvePin();
+                  const pin = lastPinRef.current || resolvePin();
                   if (pin) void connect(pin);
                   else setPhase({ kind: "pin" });
                 }}
@@ -203,7 +239,7 @@ export function RemoteView() {
 
       {phase.kind === "live" ? (
         <>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid shrink-0 grid-cols-4 gap-2">
             {MODULES.map((m) => (
               <Button
                 key={m.id}
@@ -217,29 +253,52 @@ export function RemoteView() {
           </div>
 
           <Card className="flex min-h-0 flex-1 flex-col">
-            <CardHeader className="shrink-0 pb-2">
-              <CardTitle className="text-base">
-                {currentTitle(phase.snapshot)}
-              </CardTitle>
-            </CardHeader>
+            {phase.snapshot.module === "biblia" ||
+            phase.snapshot.module === "letras" ? null : (
+              <CardHeader className="shrink-0 pb-2">
+                <CardTitle className="text-base">
+                  {currentTitle(phase.snapshot)}
+                </CardTitle>
+              </CardHeader>
+            )}
             <CardContent className="flex min-h-0 flex-1 flex-col">
-              <CurrentPreview snapshot={phase.snapshot} pin={phase.pin} />
+              {phase.snapshot.module === "biblia" ? (
+                <BibleRemote snapshot={phase.snapshot} send={(a) => void act(a)} />
+              ) : phase.snapshot.module === "letras" ? (
+                <SongsRemote snapshot={phase.snapshot} send={(a) => void act(a)} />
+              ) : (
+                <CurrentPreview snapshot={phase.snapshot} pin={phase.pin} />
+              )}
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid shrink-0 grid-cols-2 gap-2">
             <Button size="lg" variant="outline" onClick={() => void act({ type: "prev" })}>
               <ChevronLeft className="mr-1 h-5 w-5" /> Anterior
             </Button>
             <Button size="lg" variant="outline" onClick={() => void act({ type: "next" })}>
               Próximo <ChevronRight className="ml-1 h-5 w-5" />
             </Button>
-            <Button size="lg" onClick={() => void act({ type: "project" })}>
-              <Play className="mr-1 h-5 w-5" /> Projetar
-            </Button>
-            <Button size="lg" variant="secondary" onClick={() => void act({ type: "clear" })}>
-              <Eraser className="mr-1 h-5 w-5" /> Limpar
-            </Button>
+            {phase.snapshot.live ? (
+              <Button
+                size="lg"
+                variant="secondary"
+                className="col-span-2"
+                aria-pressed={true}
+                onClick={() => void act({ type: "clear" })}
+              >
+                <Eraser className="mr-1 h-5 w-5" /> Limpar
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                className="col-span-2"
+                aria-pressed={false}
+                onClick={() => void act({ type: "project" })}
+              >
+                <Play className="mr-1 h-5 w-5" /> Projetar
+              </Button>
+            )}
           </div>
         </>
       ) : null}
@@ -297,7 +356,7 @@ function CurrentPreview({
     );
   }
   return (
-    <ScrollArea className="min-h-32 flex-1 rounded-md border p-3">
+    <ScrollArea className="min-h-0 flex-1 rounded-md border p-3">
       <p className="text-sm whitespace-pre-line">{currentBody(snapshot)}</p>
     </ScrollArea>
   );
