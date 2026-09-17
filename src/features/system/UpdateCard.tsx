@@ -96,7 +96,7 @@ export function UpdateCard() {
       : null;
 
   return (
-    <Card className="flex min-h-0 flex-col">
+    <Card className="flex min-h-0 shrink-0 flex-col">
       <CardHeader className="shrink-0">
         <CardTitle>Atualizações</CardTitle>
         <CardDescription>

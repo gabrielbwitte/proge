@@ -16,6 +16,7 @@ import {
     VideosPanel,
 } from "@/features/modules/panels"
 import { ProjectionProvider } from "@/features/projection/store"
+import { RemoteSyncBridge } from "@/features/remote/remote-sync"
 import { useProjectionShortcuts } from "@/features/projection/useProjectionShortcuts"
 import { autoApplySavedLayout } from "@/features/stage/monitors"
 import type { ModuleId } from "@/features/projection/types"
@@ -60,6 +61,7 @@ export default function Page() {
     return (
         <ProjectionProvider>
             <ShortcutsHost>
+            <RemoteSyncBridge module={module} onModuleChange={setModule} />
             <SidebarProvider
                 style={
                     {

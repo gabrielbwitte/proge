@@ -8,6 +8,7 @@ import { FotosPanel } from "../media/FotosPanel";
 import { VideosPanel } from "../media/VideosPanel";
 import { MediaSettings } from "../media/MediaSettings";
 import { UpdateCard } from "../system/UpdateCard";
+import { RemoteControlCard } from "../remote/RemoteControlCard";
 import { MonitorManager } from "../stage/MonitorManager";
 import { LyricsSettings } from "../letras/LyricsSettings";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +35,7 @@ function DatabaseCard() {
   }, []);
 
   return (
-    <Card>
+    <Card className="shrink-0">
       <CardHeader>
         <CardTitle>Banco de dados local</CardTitle>
         <CardDescription>
@@ -73,6 +74,7 @@ export function ConfigPanel() {
           <StageOutputsCard />
         </TabsContent>
         <TabsContent value="sistema" className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+          <RemoteControlCard />
           <UpdateCard />
           <DatabaseCard />
         </TabsContent>
